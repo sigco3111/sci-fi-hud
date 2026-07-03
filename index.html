@@ -1,11 +1,2473 @@
 <!DOCTYPE html>
-<!-- Placeholder: MiniMax-M3 via OpenCode will replace this with the full Sci-Fi HUD implementation. -->
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <title>sci-fi-hud</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>J.A.R.V.I.S. // CYBERNETIC HUD v3.7.2</title>
+<meta name="description" content="Iron Man JARVIS / sci-fi hacking HUD — Pure CSS + SVG animation, single file, zero dependencies." />
+<style>
+  /* =========================================================
+     1. DESIGN TOKENS
+     ========================================================= */
+  :root {
+    --bg:            #02070d;
+    --bg-deep:       #000307;
+    --primary:       #00f0ff;        /* electric cyan */
+    --primary-soft:  rgba(0, 240, 255, 0.65);
+    --primary-dim:   rgba(0, 240, 255, 0.35);
+    --primary-faint: rgba(0, 240, 255, 0.12);
+    --secondary:     #00ff9d;        /* matrix green */
+    --tertiary:      #ffaa00;        /* amber alert */
+    --danger:        #ff2e63;        /* system breach */
+    --danger-soft:   rgba(255, 46, 99, 0.65);
+    --magenta:       #ff00d4;        /* trace purple */
+    --text-dim:      rgba(160, 220, 235, 0.45);
+    --grid:          rgba(0, 240, 255, 0.06);
+    --grid-strong:   rgba(0, 240, 255, 0.14);
+
+    --font-mono: 'JetBrains Mono', 'SF Mono', 'Monaco', 'Cascadia Code',
+                 'Roboto Mono', 'Consolas', 'Liberation Mono', monospace;
+    --font-display: 'Orbitron', 'Rajdhani', var(--font-mono);
+  }
+
+  /* =========================================================
+     2. RESET + BASE
+     ========================================================= */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-deep);
+    color: var(--primary);
+    font-family: var(--font-mono);
+    font-size: clamp(10px, 0.95vmin, 14px);
+    letter-spacing: 0.04em;
+    cursor: crosshair;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+  }
+
+  body {
+    background:
+      radial-gradient(ellipse at center, #001822 0%, #000307 65%, #000000 100%);
+    position: relative;
+  }
+
+  ::selection { background: var(--primary); color: var(--bg-deep); }
+
+  /* =========================================================
+     3. BACKGROUND LAYERS (z 0–3)
+     ========================================================= */
+
+  /* 3.1 hex grid */
+  .bg-hex {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    background-image:
+      /* hex tile pattern via two repeating-linear-gradients */
+      linear-gradient(60deg,  var(--grid) 25%, transparent 25.5%, transparent 75%, var(--grid) 75.5%, var(--grid)),
+      linear-gradient(-60deg, var(--grid) 25%, transparent 25.5%, transparent 75%, var(--grid) 75.5%, var(--grid)),
+      linear-gradient(0deg,   var(--grid) 25%, transparent 25.5%, transparent 75%, var(--grid) 75.5%, var(--grid));
+    background-size: 60px 104px, 60px 104px, 60px 104px;
+    background-position: 0 0, 30px 52px, 30px 0;
+    opacity: 0.55;
+    mask-image: radial-gradient(ellipse at center, #000 25%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse at center, #000 25%, transparent 75%);
+  }
+
+  /* 3.2 square grid overlay (perspective floor) */
+  .bg-grid {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    background-image:
+      linear-gradient(var(--grid-strong) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-strong) 1px, transparent 1px);
+    background-size: 80px 80px;
+    mask-image: radial-gradient(ellipse 60% 50% at center bottom, #000 30%, transparent 80%);
+    -webkit-mask-image: radial-gradient(ellipse 60% 50% at center bottom, #000 30%, transparent 80%);
+    opacity: 0.4;
+    transform: perspective(900px) rotateX(62deg) translateY(20vh) scale(2);
+    transform-origin: center bottom;
+  }
+
+  /* 3.3 scanlines */
+  .bg-scanlines {
+    position: fixed; inset: 0; z-index: 2; pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0, 240, 255, 0.03) 0px,
+      rgba(0, 240, 255, 0.03) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode: screen;
+  }
+
+  /* 3.4 moving scan line */
+  .bg-scan-line {
+    position: fixed; left: 0; right: 0; top: 0; height: 14vh;
+    z-index: 3; pointer-events: none;
+    background: linear-gradient(to bottom,
+      transparent 0%,
+      rgba(0, 240, 255, 0.05) 50%,
+      rgba(0, 240, 255, 0.18) 100%);
+    animation: scan-move 7s linear infinite;
+    will-change: transform;
+  }
+
+  /* 3.5 vignette */
+  .bg-vignette {
+    position: fixed; inset: 0; z-index: 4; pointer-events: none;
+    background: radial-gradient(ellipse at center,
+      transparent 30%,
+      rgba(0, 0, 0, 0.55) 80%,
+      rgba(0, 0, 0, 0.95) 100%);
+  }
+
+  /* 3.6 grain (SVG turbulence baked into data-URI) */
+  .bg-grain {
+    position: fixed; inset: 0; z-index: 5; pointer-events: none;
+    opacity: 0.06;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.4 0 0 0 0 0.95 0 0 0 0 1 0 0 0 0.7 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    animation: grain-shift 1.2s steps(6) infinite;
+  }
+
+  /* 3.7 chromatic-aberration corner glows */
+  .bg-glow-tr, .bg-glow-bl {
+    position: fixed; width: 38vmin; height: 38vmin; z-index: 2;
+    pointer-events: none; border-radius: 50%;
+    filter: blur(60px);
+    mix-blend-mode: screen;
+    opacity: 0.45;
+  }
+  .bg-glow-tr {
+    top: -10vmin; right: -10vmin;
+    background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
+  }
+  .bg-glow-bl {
+    bottom: -10vmin; left: -10vmin;
+    background: radial-gradient(circle, var(--secondary) 0%, transparent 70%);
+    opacity: 0.35;
+  }
+
+  /* =========================================================
+     4. GLOBAL APP SHELL (z 10)
+     ========================================================= */
+  .stage {
+    position: fixed; inset: 0; z-index: 10;
+    padding: clamp(14px, 2.2vmin, 28px);
+    display: grid;
+    grid-template-columns: minmax(220px, 22vw) 1fr minmax(220px, 22vw);
+    grid-template-rows: auto 1fr auto;
+    gap: clamp(10px, 1.6vmin, 22px);
+    pointer-events: none;
+  }
+  .stage > * { pointer-events: auto; }
+
+  /* corner brackets */
+  .frame-corner {
+    position: fixed; width: clamp(48px, 7vmin, 96px); height: clamp(48px, 7vmin, 96px);
+    z-index: 11; pointer-events: none;
+  }
+  .frame-corner svg { width: 100%; height: 100%; }
+  .fc-tl { top: clamp(8px, 1.2vmin, 16px); left: clamp(8px, 1.2vmin, 16px); }
+  .fc-tr { top: clamp(8px, 1.2vmin, 16px); right: clamp(8px, 1.2vmin, 16px); transform: scaleX(-1); }
+  .fc-bl { bottom: clamp(8px, 1.2vmin, 16px); left: clamp(8px, 1.2vmin, 16px); transform: scaleY(-1); }
+  .fc-br { bottom: clamp(8px, 1.2vmin, 16px); right: clamp(8px, 1.2vmin, 16px); transform: scale(-1, -1); }
+
+  /* =========================================================
+     5. TOP STATUS BAR
+     ========================================================= */
+  .top-bar {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: clamp(8px, 1.5vmin, 18px);
+    padding: 0.6em 0;
+    border-top: 1px solid var(--primary-dim);
+    border-bottom: 1px solid var(--primary-dim);
+    background: linear-gradient(to bottom, rgba(0,240,255,0.04), transparent);
+  }
+
+  .tb-cell {
+    display: flex; align-items: center; gap: 0.9em;
+    font-size: clamp(10px, 1.05vmin, 13px);
+    color: var(--primary);
+    text-transform: uppercase;
+  }
+  .tb-left  { justify-self: start; }
+  .tb-mid   { justify-self: center; flex-direction: column; gap: 0.1em; }
+  .tb-right { justify-self: end; }
+
+  .tb-cell .dot {
+    width: 0.6em; height: 0.6em; border-radius: 50%;
+    background: var(--secondary);
+    box-shadow: 0 0 8px var(--secondary);
+    animation: blink-soft 1.4s ease-in-out infinite;
+  }
+  .tb-cell .dot.danger {
+    background: var(--danger);
+    box-shadow: 0 0 10px var(--danger);
+    animation: warning-flash 0.6s ease-in-out infinite;
+  }
+  .tb-cell .label { color: var(--text-dim); }
+  .tb-cell .val   { color: var(--primary); font-weight: 600; }
+
+  .tb-title {
+    font-size: clamp(12px, 1.5vmin, 18px);
+    letter-spacing: 0.4em;
+    font-weight: 700;
+    text-shadow: 0 0 12px var(--primary-soft);
+    color: var(--primary);
+  }
+  .tb-subtitle {
+    font-size: clamp(8px, 0.78vmin, 10px);
+    letter-spacing: 0.32em;
+    color: var(--text-dim);
+  }
+
+  .threat-meter {
+    display: inline-flex; align-items: center; gap: 0.45em;
+  }
+  .threat-bars { display: inline-flex; gap: 2px; }
+  .threat-bars span {
+    width: 0.3em; height: 0.85em; background: var(--primary-faint);
+    border: 1px solid var(--primary-dim);
+    transition: background 0.25s, box-shadow 0.25s;
+  }
+  .threat-bars span.on {
+    background: var(--tertiary);
+    border-color: var(--tertiary);
+    box-shadow: 0 0 6px var(--tertiary);
+  }
+  .threat-bars span.on.danger {
+    background: var(--danger);
+    border-color: var(--danger);
+    box-shadow: 0 0 8px var(--danger);
+  }
+
+  /* =========================================================
+     6. PANELS — common
+     ========================================================= */
+  .panel {
+    position: relative;
+    padding: 0.95em 1.05em 1em;
+    background: linear-gradient(180deg,
+      rgba(0, 240, 255, 0.04) 0%,
+      rgba(0, 240, 255, 0.01) 100%);
+    border: 1px solid var(--primary-dim);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    overflow: hidden;
+  }
+  .panel::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      linear-gradient(to right, var(--primary) 0, transparent 8%) top left/14px 1px no-repeat,
+      linear-gradient(to bottom, var(--primary) 0, transparent 8%) top left/1px 14px no-repeat,
+      linear-gradient(to left, var(--primary) 0, transparent 8%) top right/14px 1px no-repeat,
+      linear-gradient(to bottom, var(--primary) 0, transparent 8%) top right/1px 14px no-repeat,
+      linear-gradient(to right, var(--primary) 0, transparent 8%) bottom left/14px 1px no-repeat,
+      linear-gradient(to top, var(--primary) 0, transparent 8%) bottom left/1px 14px no-repeat,
+      linear-gradient(to left, var(--primary) 0, transparent 8%) bottom right/14px 1px no-repeat,
+      linear-gradient(to top, var(--primary) 0, transparent 8%) bottom right/1px 14px no-repeat;
+    opacity: 0.85;
+  }
+  .panel::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(90deg,
+      transparent 0%, transparent 92%, var(--primary-faint) 92%, var(--primary-faint) 100%);
+    opacity: 0.4;
+  }
+
+  .panel-title {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: -0.2em -0.3em 0.7em;
+    padding: 0.25em 0.5em;
+    font-size: clamp(9px, 0.95vmin, 12px);
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--primary);
+    border-bottom: 1px solid var(--primary-faint);
+  }
+  .panel-title .ico {
+    display: inline-block; width: 0.9em; height: 0.9em;
+    margin-right: 0.45em;
+    border: 1px solid var(--primary);
+    background: linear-gradient(135deg, transparent 40%, var(--primary) 40%, var(--primary) 60%, transparent 60%);
+    box-shadow: 0 0 6px var(--primary-soft);
+    transform: rotate(45deg);
+  }
+  .panel-title .meta {
+    font-size: 0.78em;
+    color: var(--text-dim);
+    letter-spacing: 0.22em;
+  }
+
+  /* =========================================================
+     7. LEFT PANEL — DIAGNOSTICS / NETWORK
+     ========================================================= */
+  .left-col { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; gap: 1em; min-height: 0; }
+
+  .diag-list { list-style: none; display: flex; flex-direction: column; gap: 0.55em; }
+  .diag-list li {
+    display: grid;
+    grid-template-columns: 5.5em 1fr auto;
+    align-items: center;
+    gap: 0.5em;
+    font-size: 0.92em;
+  }
+  .diag-list .name { color: var(--text-dim); letter-spacing: 0.18em; text-transform: uppercase; }
+  .diag-list .bar {
+    position: relative; height: 0.55em;
+    background: rgba(0, 240, 255, 0.07);
+    border: 1px solid var(--primary-dim);
+    overflow: hidden;
+  }
+  .diag-list .bar > span {
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, var(--secondary), var(--primary));
+    box-shadow: 0 0 8px var(--primary-soft);
+    width: var(--w, 50%);
+    animation: bar-grow 2.6s cubic-bezier(.6,.2,.2,1) infinite alternate;
+    transform-origin: left;
+  }
+  .diag-list .bar > span.warn {
+    background: linear-gradient(90deg, var(--tertiary), var(--danger));
+    box-shadow: 0 0 8px var(--danger-soft);
+  }
+  .diag-list .pct { color: var(--primary); font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: right; }
+
+  .net-graph {
+    width: 100%; aspect-ratio: 1.2 / 1; min-height: 9em;
+    background: radial-gradient(ellipse at center, rgba(0,240,255,0.05), transparent 70%);
+    border: 1px solid var(--primary-faint);
+    position: relative;
+  }
+  .net-graph svg { width: 100%; height: 100%; display: block; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.55em;
+  }
+  .stat {
+    border: 1px solid var(--primary-faint);
+    padding: 0.45em 0.55em;
+    position: relative;
+  }
+  .stat .k { color: var(--text-dim); font-size: 0.74em; letter-spacing: 0.22em; text-transform: uppercase; }
+  .stat .v {
+    color: var(--primary); font-size: 1.2em; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 6px var(--primary-soft);
+  }
+  .stat .u { color: var(--text-dim); font-size: 0.7em; margin-left: 0.3em; }
+
+  /* =========================================================
+     8. CENTER HUD — ROTATING RINGS
+     ========================================================= */
+  .center-col {
+    grid-column: 2; grid-row: 2;
+    position: relative;
+    display: grid; place-items: center;
+    min-height: 0; min-width: 0;
+  }
+  .hud-center {
+    position: relative;
+    width: min(72vmin, 86%); aspect-ratio: 1 / 1;
+    display: grid; place-items: center;
+  }
+
+  /* ring system — each ring sits absolute, centered, and rotates */
+  .ring {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    will-change: transform;
+  }
+  .ring svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+  .ring-1 { animation: rotate-cw 38s linear infinite; }
+  .ring-2 { animation: rotate-ccw 18s linear infinite; }
+  .ring-3 { animation: rotate-cw 11s linear infinite; }
+  .ring-4 { animation: rotate-ccw 7s linear infinite; }
+  .ring-5 { animation: rotate-cw 4.5s linear infinite; }
+
+  /* dashed strokes animate via dashoffset for marching ants */
+  .ring .dash-march {
+    animation: dash-march 6s linear infinite;
+  }
+  .ring .dash-march-rev {
+    animation: dash-march 9s linear infinite reverse;
+  }
+  .ring .dash-march-fast {
+    animation: dash-march 2.4s linear infinite;
+  }
+
+  /* tick fade pulse */
+  .ring .pulse-soft { animation: blink-soft 2.4s ease-in-out infinite; }
+  .ring .pulse-fast { animation: blink-soft 0.9s ease-in-out infinite; }
+
+  /* center crosshair + hex reticle */
+  .reticle {
+    position: absolute;
+    width: 26%; aspect-ratio: 1 / 1;
+    pointer-events: none;
+    animation: rotate-cw 30s linear infinite;
+  }
+  .reticle svg { width: 100%; height: 100%; }
+
+  .core {
+    position: absolute;
+    width: 4%; aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff 0%, var(--primary) 35%, transparent 80%);
+    box-shadow: 0 0 18px var(--primary), 0 0 36px var(--primary-soft);
+    animation: core-pulse 1.6s ease-in-out infinite;
+  }
+  .core-ring {
+    position: absolute;
+    width: 8%; aspect-ratio: 1 / 1;
+    border: 1.5px solid var(--primary);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--primary-soft), inset 0 0 8px var(--primary-faint);
+    animation: core-ring 1.6s ease-in-out infinite;
+  }
+
+  /* radar sweep — conic gradient over the circle */
+  .radar-sweep {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg,
+      rgba(0, 240, 255, 0.45) 0deg,
+      rgba(0, 240, 255, 0.15) 30deg,
+      transparent 90deg);
+    mix-blend-mode: screen;
+    animation: rotate-cw 3.6s linear infinite;
+    mask-image: radial-gradient(circle, transparent 0%, transparent 18%, #000 18%, #000 48%);
+    -webkit-mask-image: radial-gradient(circle, transparent 0%, transparent 18%, #000 18%, #000 48%);
+  }
+
+  /* corner readouts floating around the rings */
+  .readouts {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    font-size: 0.85em;
+  }
+  .readouts .ro {
+    position: absolute;
+    display: flex; align-items: center; gap: 0.45em;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    font-variant-numeric: tabular-nums;
+  }
+  .readouts .ro .bar {
+    width: 2.6em; height: 0.4em;
+    background: rgba(0, 240, 255, 0.1);
+    border: 1px solid var(--primary-dim);
+    position: relative; overflow: hidden;
+  }
+  .readouts .ro .bar > span {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: var(--w, 50%);
+    background: linear-gradient(90deg, var(--primary), var(--secondary));
+    box-shadow: 0 0 6px var(--primary-soft);
+  }
+  .readouts .ro.r1 { top: -2%; left: -2%; }
+  .readouts .ro.r2 { top: -2%; right: -2%; flex-direction: row-reverse; }
+  .readouts .ro.r3 { bottom: -2%; left: -2%; }
+  .readouts .ro.r4 { bottom: -2%; right: -2%; flex-direction: row-reverse; }
+  .readouts .ro.r5 { top: 50%; left: -7%; transform: translateY(-50%); }
+  .readouts .ro.r6 { top: 50%; right: -7%; transform: translateY(-50%); flex-direction: row-reverse; }
+
+  /* center coordinate label below core */
+  .coord-tag {
+    position: absolute;
+    bottom: 6%; left: 50%; transform: translateX(-50%);
+    padding: 0.3em 0.9em;
+    border: 1px solid var(--primary-dim);
+    background: rgba(0, 240, 255, 0.06);
+    font-size: 0.9em;
+    letter-spacing: 0.32em;
+    color: var(--primary);
+    text-shadow: 0 0 6px var(--primary-soft);
+    white-space: nowrap;
+  }
+
+  /* outer ring coordinate ticks */
+  .tick-ring {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+  .tick-ring svg { width: 100%; height: 100%; }
+
+  /* =========================================================
+     9. RIGHT PANEL — DATA STREAM / LOG
+     ========================================================= */
+  .right-col { grid-column: 3; grid-row: 2; display: flex; flex-direction: column; gap: 1em; min-height: 0; }
+
+  .stream-wrap {
+    flex: 1 1 auto; min-height: 7em;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--primary-faint);
+    background: rgba(0, 240, 255, 0.025);
+    padding: 0.4em 0.5em;
+    font-size: clamp(9px, 0.95vmin, 12px);
+    line-height: 1.45;
+    color: var(--primary);
+    mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 86%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 86%, transparent 100%);
+  }
+  .stream {
+    position: absolute; left: 0; right: 0; top: 0;
+    will-change: transform;
+    animation: stream-fall 14s linear infinite;
+  }
+  .stream .line {
+    display: block;
+    color: var(--primary-soft);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    text-overflow: clip;
+    overflow: hidden;
+  }
+  .stream .line.head { color: var(--secondary); text-shadow: 0 0 6px var(--secondary); }
+  .stream .line.warn { color: var(--tertiary); }
+  .stream .line.crit { color: var(--danger); text-shadow: 0 0 6px var(--danger-soft); }
+
+  .log-list {
+    list-style: none; display: flex; flex-direction: column; gap: 0.4em;
+    font-size: 0.9em;
+    max-height: 18vh; overflow: hidden;
+    position: relative;
+    mask-image: linear-gradient(to bottom, transparent 0%, #000 12%, #000 88%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 12%, #000 88%, transparent 100%);
+  }
+  .log-list .l {
+    display: grid; grid-template-columns: 5em 1fr auto; gap: 0.6em;
+    color: var(--primary);
+    font-variant-numeric: tabular-nums;
+  }
+  .log-list .l .t { color: var(--text-dim); }
+  .log-list .l .m { letter-spacing: 0.05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .log-list .l .s { letter-spacing: 0.18em; font-size: 0.85em; }
+  .log-list .l .s.ok    { color: var(--secondary); }
+  .log-list .l .s.warn  { color: var(--tertiary); }
+  .log-list .l .s.crit  { color: var(--danger); }
+
+  .files {
+    list-style: none; font-size: 0.86em;
+    display: flex; flex-direction: column; gap: 0.25em;
+    max-height: 22vh; overflow: hidden;
+    position: relative;
+    mask-image: linear-gradient(to bottom, #000 0%, #000 88%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 88%, transparent 100%);
+  }
+  .files li {
+    display: grid; grid-template-columns: 1fr auto auto;
+    gap: 0.6em; align-items: center;
+    color: var(--primary);
+    font-variant-numeric: tabular-nums;
+    padding: 0.18em 0;
+    border-bottom: 1px dashed var(--primary-faint);
+  }
+  .files li .n { letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .files li .sz { color: var(--text-dim); }
+  .files li .st { letter-spacing: 0.18em; font-size: 0.85em; }
+  .files li .st.lock    { color: var(--tertiary); }
+  .files li .st.ok      { color: var(--secondary); }
+  .files li .st.crit    { color: var(--danger); }
+
+  /* =========================================================
+     10. BOTTOM PANEL
+     ========================================================= */
+  .bottom-bar {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1.1fr 1.6fr 1.4fr 1.1fr;
+    gap: clamp(8px, 1.4vmin, 18px);
+    padding: 0.5em 0;
+    border-top: 1px solid var(--primary-dim);
+    border-bottom: 1px solid var(--primary-dim);
+    background: linear-gradient(to top, rgba(0,240,255,0.04), transparent);
+  }
+
+  .bb-block {
+    display: flex; flex-direction: column; gap: 0.4em;
+    font-size: clamp(9px, 0.95vmin, 12px);
+  }
+  .bb-label {
+    display: flex; justify-content: space-between; align-items: center;
+    color: var(--text-dim);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-size: 0.82em;
+  }
+  .bb-label .v { color: var(--primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .bb-bars { display: flex; flex-direction: column; gap: 0.32em; }
+  .bb-bar { display: grid; grid-template-columns: 3.5em 1fr 3em; gap: 0.5em; align-items: center; }
+  .bb-bar .n { color: var(--text-dim); letter-spacing: 0.18em; }
+  .bb-bar .track { height: 0.55em; background: rgba(0,240,255,0.07); border: 1px solid var(--primary-dim); position: relative; overflow: hidden; }
+  .bb-bar .track > span {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, var(--primary), var(--secondary));
+    box-shadow: 0 0 6px var(--primary-soft);
+    width: var(--w, 50%);
+    animation: bar-grow 3.4s cubic-bezier(.6,.2,.2,1) infinite alternate;
+  }
+  .bb-bar .pct { color: var(--primary); font-variant-numeric: tabular-nums; text-align: right; }
+
+  .scope {
+    height: 4em;
+    border: 1px solid var(--primary-faint);
+    background: rgba(0,240,255,0.04);
+    position: relative;
+    overflow: hidden;
+  }
+  .scope svg { width: 100%; height: 100%; display: block; }
+  .scope::before, .scope::after {
+    content: ""; position: absolute; top: 0; bottom: 0; width: 1px;
+    background: var(--primary-dim);
+  }
+  .scope::before { left: 25%; }
+  .scope::after { left: 75%; }
+
+  .bb-assess {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.4em;
+  }
+  .assess-cell {
+    border: 1px solid var(--primary-faint);
+    padding: 0.4em 0.5em;
+    text-align: center;
+  }
+  .assess-cell .k { color: var(--text-dim); font-size: 0.74em; letter-spacing: 0.22em; text-transform: uppercase; }
+  .assess-cell .v { font-size: 1.4em; font-weight: 700; color: var(--primary); text-shadow: 0 0 6px var(--primary-soft); }
+  .assess-cell.warn .v { color: var(--tertiary); text-shadow: 0 0 8px var(--tertiary); }
+  .assess-cell.crit .v { color: var(--danger); text-shadow: 0 0 8px var(--danger-soft); }
+  .assess-cell.ok .v   { color: var(--secondary); text-shadow: 0 0 6px var(--secondary); }
+
+  .gps {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0.45em;
+    font-variant-numeric: tabular-nums;
+  }
+  .gps div { display: flex; justify-content: space-between; gap: 0.5em; }
+  .gps .k { color: var(--text-dim); letter-spacing: 0.18em; text-transform: uppercase; font-size: 0.82em; }
+  .gps .v { color: var(--primary); }
+
+  /* =========================================================
+     11. WARNING POPUPS
+     ========================================================= */
+  .warning-stack {
+    position: fixed; inset: 0; z-index: 25;
+    pointer-events: none;
+  }
+  .warn {
+    position: absolute;
+    padding: 0.55em 0.95em;
+    background: rgba(0, 12, 20, 0.85);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid var(--primary);
+    border-left-width: 4px;
+    font-size: clamp(10px, 1.05vmin, 13px);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--primary);
+    box-shadow: 0 0 18px rgba(0, 240, 255, 0.25), inset 0 0 12px rgba(0,240,255,0.08);
+    white-space: nowrap;
+    animation: warn-life 4.8s ease-in-out forwards;
+    will-change: transform, opacity;
+  }
+  .warn .code {
+    color: var(--text-dim); font-size: 0.8em; margin-right: 0.6em;
+    letter-spacing: 0.24em;
+  }
+  .warn .dot {
+    display: inline-block; width: 0.55em; height: 0.55em;
+    border-radius: 50%; margin-right: 0.5em;
+    background: var(--secondary);
+    box-shadow: 0 0 8px var(--secondary);
+    vertical-align: middle;
+    animation: blink-soft 0.6s ease-in-out infinite;
+  }
+  .warn.t-success {
+    border-color: var(--secondary);
+    color: var(--secondary);
+    box-shadow: 0 0 22px rgba(0, 255, 157, 0.3), inset 0 0 12px rgba(0,255,157,0.08);
+  }
+  .warn.t-success .dot { background: var(--secondary); box-shadow: 0 0 8px var(--secondary); }
+  .warn.t-warn {
+    border-color: var(--tertiary);
+    color: var(--tertiary);
+    box-shadow: 0 0 22px rgba(255, 170, 0, 0.3), inset 0 0 12px rgba(255,170,0,0.08);
+  }
+  .warn.t-warn .dot { background: var(--tertiary); box-shadow: 0 0 8px var(--tertiary); }
+  .warn.t-danger {
+    border-color: var(--danger);
+    color: var(--danger);
+    box-shadow: 0 0 22px rgba(255, 46, 99, 0.35), inset 0 0 12px rgba(255,46,99,0.08);
+    animation: warn-life 4.2s ease-in-out forwards, warning-flash 0.5s ease-in-out infinite;
+  }
+  .warn.t-danger .dot { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+  .warn.t-info {
+    border-color: var(--magenta);
+    color: var(--magenta);
+    box-shadow: 0 0 22px rgba(255, 0, 212, 0.3), inset 0 0 12px rgba(255,0,212,0.08);
+  }
+  .warn.t-info .dot { background: var(--magenta); box-shadow: 0 0 8px var(--magenta); }
+
+  /* alert overlay — full-screen red flash */
+  .alert-overlay {
+    position: fixed; inset: 0; z-index: 22;
+    pointer-events: none;
+    background:
+      linear-gradient(to bottom,
+        rgba(255, 46, 99, 0.18) 0%,
+        rgba(255, 46, 99, 0.04) 40%,
+        rgba(255, 46, 99, 0.04) 60%,
+        rgba(255, 46, 99, 0.18) 100%),
+      radial-gradient(ellipse at center, transparent 35%, rgba(255, 46, 99, 0.18) 80%);
+    border: 4px solid var(--danger);
+    opacity: 0;
+    animation: alert-flash 2.4s ease-in-out forwards;
+  }
+  .alert-overlay .top, .alert-overlay .bot {
+    position: absolute; left: 0; right: 0;
+    text-align: center;
+    color: var(--danger);
+    letter-spacing: 0.6em;
+    text-transform: uppercase;
+    font-size: clamp(14px, 1.8vmin, 22px);
+    text-shadow: 0 0 16px var(--danger);
+    font-weight: 700;
+  }
+  .alert-overlay .top { top: 8%; }
+  .alert-overlay .bot { bottom: 8%; }
+
+  /* =========================================================
+     12. KEYFRAMES — MOTION LANGUAGE
+     ========================================================= */
+  @keyframes rotate-cw  { from { transform: rotate(0deg);   } to { transform: rotate(360deg);  } }
+  @keyframes rotate-ccw { from { transform: rotate(0deg);   } to { transform: rotate(-360deg); } }
+
+  @keyframes pulse        { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+  @keyframes pulse-strong { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.04); } }
+  @keyframes blink-soft   { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  @keyframes blink        { 0%,49% { opacity: 1; } 50%,100% { opacity: 0.2; } }
+  @keyframes flicker      {
+    0%,19%,21%,23%,25%,54%,56%,100% { opacity: 1; }
+    20%,24%,55%                       { opacity: 0.55; }
+  }
+
+  @keyframes dash-march   { to { stroke-dashoffset: -1000; } }
+
+  @keyframes scan-move {
+    0%   { transform: translateY(-20vh); }
+    100% { transform: translateY(120vh); }
+  }
+  @keyframes grain-shift {
+    0%   { transform: translate(0,0); }
+    20%  { transform: translate(-3%, 2%); }
+    40%  { transform: translate(2%, -2%); }
+    60%  { transform: translate(-2%, -1%); }
+    80%  { transform: translate(1%, 3%); }
+    100% { transform: translate(0,0); }
+  }
+
+  @keyframes core-pulse {
+    0%,100% { transform: scale(1); opacity: 1; box-shadow: 0 0 30px var(--primary), 0 0 60px var(--primary-soft); }
+    50%     { transform: scale(1.25); opacity: 0.85; box-shadow: 0 0 50px var(--primary), 0 0 90px var(--primary-soft); }
+  }
+  @keyframes core-ring {
+    0%,100% { transform: scale(1);   opacity: 1;   }
+    50%     { transform: scale(1.45); opacity: 0.4; }
+  }
+
+  @keyframes stream-fall {
+    0%   { transform: translateY(0); }
+    100% { transform: translateY(-50%); }
+  }
+
+  @keyframes bar-grow {
+    0%   { width: var(--w-lo, 25%); }
+    100% { width: var(--w-hi, 80%); }
+  }
+
+  @keyframes warning-flash {
+    0%,100% { opacity: 1;   }
+    50%     { opacity: 0.25; }
+  }
+
+  @keyframes warn-life {
+    0%   { transform: translateX(-30px); opacity: 0; }
+    8%   { transform: translateX(0);     opacity: 1; }
+    90%  { transform: translateX(0);     opacity: 1; }
+    100% { transform: translateX(40px);  opacity: 0; }
+  }
+
+  @keyframes alert-flash {
+    0%   { opacity: 0; }
+    8%   { opacity: 1; }
+    20%  { opacity: 0.4; }
+    32%  { opacity: 1; }
+    50%  { opacity: 0.7; }
+    65%  { opacity: 1; }
+    82%  { opacity: 0.5; }
+    100% { opacity: 0; }
+  }
+
+  @keyframes typewriter {
+    from { width: 0; }
+    to   { width: 100%; }
+  }
+
+  @keyframes oscilloscope {
+    0%   { d: path("M0,30 L20,28 L40,32 L60,18 L80,40 L100,22 L120,36 L140,14 L160,42 L180,28 L200,32 L220,18 L240,40 L260,24 L280,38 L300,16 L320,44 L340,26 L360,34 L380,20 L400,42 L420,24 L440,36 L460,18 L480,40 L500,28 L520,32 L540,20 L560,38 L580,26 L600,34 L620,16 L640,42 L660,28 L680,32 L700,18 L720,40 L740,24 L760,36 L780,20 L800,44"); }
+    25%  { d: path("M0,34 L20,18 L40,40 L60,22 L80,30 L100,16 L120,42 L140,26 L160,20 L180,38 L200,14 L220,36 L240,28 L260,18 L280,40 L300,32 L320,16 L340,42 L360,22 L380,30 L400,18 L420,38 L440,26 L460,34 L480,20 L500,40 L520,16 L540,32 L560,24 L580,38 L600,20 L620,34 L640,18 L660,40 L680,26 L700,32 L720,22 L740,38 L760,16 L780,34 L800,28"); }
+    50%  { d: path("M0,20 L20,40 L40,18 L60,36 L80,22 L100,42 L120,16 L140,38 L160,24 L180,32 L200,40 L220,20 L240,30 L260,38 L280,16 L300,34 L320,28 L340,40 L360,18 L380,36 L400,22 L420,32 L440,38 L460,20 L480,30 L500,42 L520,18 L540,34 L560,24 L580,30 L600,40 L620,22 L640,36 L660,16 L680,32 L700,28 L720,38 L740,20 L760,34 L780,24 L800,42"); }
+    75%  { d: path("M0,28 L20,16 L40,36 L60,40 L80,18 L100,30 L120,38 L140,22 L160,32 L180,40 L200,20 L220,34 L240,18 L260,42 L280,24 L300,36 L320,28 L340,16 L360,40 L380,22 L400,32 L420,38 L440,20 L460,30 L480,18 L500,36 L520,28 L540,40 L560,22 L580,32 L600,38 L620,16 L640,34 L660,24 L680,30 L700,42 L720,18 L740,36 L760,28 L780,20 L800,40"); }
+    100% { d: path("M0,30 L20,28 L40,32 L60,18 L80,40 L100,22 L120,36 L140,14 L160,42 L180,28 L200,32 L220,18 L240,40 L260,24 L280,38 L300,16 L320,44 L340,26 L360,34 L380,20 L400,42 L420,24 L440,36 L460,18 L480,40 L500,28 L520,32 L540,20 L560,38 L580,26 L600,34 L620,16 L640,42 L660,28 L680,32 L700,18 L720,40 L740,24 L760,36 L780,20 L800,44"); }
+  }
+
+  @keyframes trace-sweep {
+    0%   { offset-distance: 0%;   opacity: 1; }
+    90%  { opacity: 1; }
+    100% { offset-distance: 100%; opacity: 0; }
+  }
+
+  /* =========================================================
+     12.B v2.0 KEYFRAMES (boot, icosahedron, matrix, ripple, shake, glitch)
+     ========================================================= */
+
+  /* boot — scan line expanding vertically from center */
+  @keyframes boot-scan {
+    0%   { transform: translate(-50%, -50%) scaleY(0);    opacity: 0; }
+    20%  { opacity: 1; }
+    100% { transform: translate(-50%, -50%) scaleY(280); opacity: 0; }
+  }
+  /* boot — typewriter caret blink */
+  @keyframes caret-blink {
+    0%, 49%   { opacity: 1; }
+    50%, 100% { opacity: 0; }
+  }
+  /* boot — overall fade-out after 2.2s */
+  @keyframes boot-fade-out {
+    0%, 86%  { opacity: 1; visibility: visible; }
+    100%     { opacity: 0; visibility: hidden; }
+  }
+  /* boot — small progress bar */
+  @keyframes boot-progress {
+    0%   { width: 0%; }
+    100% { width: 100%; }
+  }
+  /* boot — line-by-line reveal of init log */
+  @keyframes boot-line-in {
+    0%   { opacity: 0; transform: translateX(-8px); }
+    100% { opacity: 1; transform: translateX(0); }
+  }
+
+  /* icosahedron — 3D rotation around Y, slight tilt on X for visibility */
+  @keyframes iso-rotate {
+    0%   { transform: rotateX(-22deg) rotateY(0deg)   rotateZ(0deg); }
+    100% { transform: rotateX(-22deg) rotateY(360deg) rotateZ(0deg); }
+  }
+  /* inner element counter-rotation */
+  @keyframes iso-rotate-rev {
+    0%   { transform: rotateY(0deg); }
+    100% { transform: rotateY(-360deg); }
+  }
+
+  /* matrix rain — falling hex characters */
+  @keyframes matrix-fall {
+    0%   { transform: translateY(-30px);  opacity: 0; }
+    10%  { opacity: 0.28; }
+    90%  { opacity: 0.28; }
+    100% { transform: translateY(105vh); opacity: 0; }
+  }
+
+  /* click ripple — expanding circle */
+  @keyframes ripple-expand {
+    0%   { width: 0;    height: 0;    opacity: 1; border-width: 2px; }
+    100% { width: 240px; height: 240px; opacity: 0; border-width: 1px; }
+  }
+
+  /* screen shake on alert overlay */
+  @keyframes screen-shake {
+    0%, 100% { transform: translate(0, 0) rotate(0); }
+    15%      { transform: translate(-10px, 5px) rotate(-0.4deg); }
+    30%      { transform: translate(8px, -7px) rotate(0.5deg); }
+    45%      { transform: translate(-6px, 4px) rotate(-0.3deg); }
+    60%      { transform: translate(5px, 6px) rotate(0.3deg); }
+    75%      { transform: translate(-3px, -3px) rotate(-0.2deg); }
+  }
+
+  /* glitch — RGB split on text */
+  @keyframes glitch-rgb {
+    0%, 100%         { transform: translate(0,0);    text-shadow: 0 0 0 transparent; }
+    20%              { transform: translate(-1px, 0); text-shadow: -2px 0 0 var(--danger), 2px 0 0 var(--secondary); }
+    40%              { transform: translate(1px, -1px); text-shadow: -1.5px 0 0 var(--secondary), 1.5px 0 0 var(--danger); }
+    60%              { transform: translate(-1px, 1px); text-shadow: 2px 0 0 var(--magenta), -2px 0 0 var(--primary); }
+    80%              { transform: translate(0, 0);   text-shadow: 0 0 0 transparent; }
+  }
+  /* glitch — brief flicker */
+  @keyframes glitch-flicker {
+    0%, 100%   { opacity: 1; }
+    47%, 49%   { opacity: 0.3; }
+    48%        { opacity: 1; }
+  }
+
+  /* sparkline — draw stroke */
+  @keyframes spark-draw {
+    from { stroke-dashoffset: 200; }
+    to   { stroke-dashoffset: 0; }
+  }
+
+  /* =========================================================
+     12.C v2.0 COMPONENTS (boot, icosahedron, parallax, matrix, ripple, glitch, sparkline)
+     ========================================================= */
+
+  /* ---------- root vars for mouse parallax ---------- */
+  :root {
+    --mx: 0;
+    --my: 0;
+  }
+
+  /* ---------- BOOT OVERLAY ---------- */
+  .boot-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: #000;
+    display: grid; place-items: center;
+    animation: boot-fade-out 2.4s ease-in forwards;
+    pointer-events: all;
+  }
+  .boot-overlay .scan {
+    position: absolute; left: 50%; top: 50%;
+    width: 2px; height: 2px;
+    background: var(--primary);
+    box-shadow: 0 0 24px var(--primary), 0 0 60px var(--primary-soft);
+    transform: translate(-50%, -50%);
+    animation: boot-scan 1.4s cubic-bezier(.4,0,.2,1) forwards;
+  }
+  .boot-overlay .panel-boot {
+    position: relative;
+    width: min(520px, 86vw);
+    padding: 1.4em 1.6em;
+    border: 1px solid var(--primary-dim);
+    background: rgba(0, 18, 28, 0.65);
+    font-family: var(--font-mono);
+    color: var(--primary);
+    text-shadow: 0 0 4px var(--primary-soft);
+    box-shadow: 0 0 30px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.04);
+  }
+  .boot-overlay .panel-boot::before,
+  .boot-overlay .panel-boot::after {
+    content: ""; position: absolute; width: 14px; height: 14px;
+    border: 1px solid var(--primary);
+  }
+  .boot-overlay .panel-boot::before { top: -1px; left: -1px;  border-right: none; border-bottom: none; }
+  .boot-overlay .panel-boot::after  { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+
+  .boot-title {
+    font-size: clamp(14px, 1.8vmin, 20px);
+    letter-spacing: 0.5em;
+    font-weight: 700;
+    margin-bottom: 0.4em;
+    color: var(--primary);
+  }
+  .boot-sub {
+    font-size: clamp(9px, 1.0vmin, 12px);
+    letter-spacing: 0.3em;
+    color: var(--text-dim);
+    margin-bottom: 1em;
+  }
+  .boot-log {
+    min-height: 6.2em;
+    font-size: clamp(9px, 0.95vmin, 12px);
+    line-height: 1.5;
+    color: var(--primary);
+    border-top: 1px dashed var(--primary-faint);
+    border-bottom: 1px dashed var(--primary-faint);
+    padding: 0.6em 0;
+    margin-bottom: 0.9em;
+    overflow: hidden;
+  }
+  .boot-log .ln {
+    display: block;
+    opacity: 0;
+    animation: boot-line-in 0.3s ease-out forwards;
+    letter-spacing: 0.06em;
+  }
+  .boot-log .ln.ok   { color: var(--secondary); }
+  .boot-log .ln.warn { color: var(--tertiary); }
+  .boot-log .ln.err  { color: var(--danger); }
+
+  .boot-progress {
+    display: grid; grid-template-columns: 1fr auto;
+    align-items: center; gap: 0.7em;
+    font-size: clamp(9px, 0.95vmin, 12px);
+    color: var(--primary);
+    letter-spacing: 0.22em;
+  }
+  .boot-progress .track {
+    height: 0.55em;
+    border: 1px solid var(--primary-dim);
+    background: rgba(0, 240, 255, 0.06);
+    position: relative;
+    overflow: hidden;
+  }
+  .boot-progress .fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--secondary), var(--primary));
+    box-shadow: 0 0 8px var(--primary-soft);
+    animation: boot-progress 2.0s cubic-bezier(.4,0,.2,1) forwards;
+  }
+  .boot-progress .pct { font-variant-numeric: tabular-nums; min-width: 3.5em; text-align: right; }
+
+  /* ---------- 3D ICOSAHEDRON ---------- */
+  .iso-container {
+    position: absolute;
+    width: 78%;
+    aspect-ratio: 1 / 1;
+    transform-style: preserve-3d;
+    perspective: 1400px;
+    perspective-origin: 50% 50%;
+    animation: iso-rotate 28s linear infinite;
+    pointer-events: none;
+  }
+  .iso-edge {
+    position: absolute;
+    left: 50%; top: 50%;
+    height: 1.8px;
+    background: linear-gradient(to right, rgba(0,240,255,0.4), var(--primary), rgba(0,240,255,0.4));
+    box-shadow: 0 0 6px var(--primary), 0 0 12px var(--primary-soft);
+    transform-origin: 0 50%;
+    will-change: transform;
+  }
+  .iso-edge.bright {
+    background: linear-gradient(to right, rgba(0,255,157,0.4), var(--secondary), rgba(0,255,157,0.4));
+    box-shadow: 0 0 6px var(--secondary), 0 0 12px var(--secondary);
+  }
+  .iso-vertex {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 9px; height: 9px;
+    margin-left: -4.5px; margin-top: -4.5px;
+    border-radius: 50%;
+    background: var(--secondary);
+    box-shadow: 0 0 12px var(--secondary), 0 0 24px var(--secondary);
+    will-change: transform;
+  }
+  .iso-vertex.hot {
+    background: var(--tertiary);
+    box-shadow: 0 0 12px var(--tertiary), 0 0 26px var(--tertiary);
+  }
+  /* inner solid wireframe at smaller scale for depth */
+  .iso-inner {
+    position: absolute;
+    width: 32%; aspect-ratio: 1/1;
+    transform-style: preserve-3d;
+    animation: iso-rotate-rev 18s linear infinite;
+    pointer-events: none;
+  }
+  .iso-inner svg { width: 100%; height: 100%; }
+
+  /* ---------- MOUSE PARALLAX on center HUD ---------- */
+  .hud-center {
+    transform-style: preserve-3d;
+    transition: transform 0.35s cubic-bezier(.2,.6,.2,1);
+  }
+  /* the parallax transform is applied to .center-stack wrapper, not .hud-center,
+     because we also want the rings to share the tilt */
+
+  /* ---------- MATRIX RAIN ---------- */
+  .matrix-rain {
+    position: fixed; inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+    mask-image: radial-gradient(ellipse at center, #000 30%, transparent 85%);
+    -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 85%);
+  }
+  .matrix-rain .col {
+    position: absolute;
+    top: -200px;
+    font-family: var(--font-mono);
+    font-size: clamp(11px, 1.25vmin, 16px);
+    line-height: 1.3;
+    letter-spacing: 0.05em;
+    color: var(--primary);
+    white-space: nowrap;
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+    will-change: transform, opacity;
+    animation: matrix-fall linear infinite;
+    text-shadow: 0 0 4px var(--primary-soft);
+  }
+  .matrix-rain .col .head {
+    color: var(--secondary);
+    text-shadow: 0 0 6px var(--secondary);
+  }
+
+  /* ---------- CLICK RIPPLE ---------- */
+  .ripple {
+    position: fixed;
+    width: 0; height: 0;
+    border: 2px solid var(--primary);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 80;
+    animation: ripple-expand 0.9s cubic-bezier(.2,.6,.2,1) forwards;
+    box-shadow: 0 0 12px var(--primary-soft), inset 0 0 6px var(--primary-faint);
+  }
+  .ripple.t-warn   { border-color: var(--tertiary); box-shadow: 0 0 12px var(--tertiary); }
+  .ripple.t-danger { border-color: var(--danger);   box-shadow: 0 0 14px var(--danger-soft); }
+  .ripple.t-success{ border-color: var(--secondary);box-shadow: 0 0 12px var(--secondary); }
+
+  /* ---------- SCREEN SHAKE on alert overlay ---------- */
+  .alert-overlay.shake {
+    animation: alert-flash 2.4s ease-in-out forwards, screen-shake 0.42s ease-in-out;
+  }
+  /* also shake main stage lightly when alert is on */
+  body.shake .stage {
+    animation: screen-shake 0.42s ease-in-out;
+  }
+
+  /* ---------- GLITCH TEXT ---------- */
+  .glitch {
+    position: relative;
+    display: inline-block;
+    animation: glitch-rgb 0.4s steps(2) both, glitch-flicker 0.4s steps(2) both;
+  }
+  /* persistent glitching label class (random trigger via JS) */
+  .threat-glitch {
+    position: relative;
+    display: inline-block;
+  }
+  .threat-glitch.live::before,
+  .threat-glitch.live::after {
+    content: attr(data-text);
+    position: absolute; left: 0; top: 0;
+    width: 100%; overflow: hidden;
+  }
+  .threat-glitch.live::before {
+    color: var(--danger);
+    transform: translate(-1.5px, 0);
+    clip-path: inset(0 0 60% 0);
+    animation: glitch-rgb 0.4s steps(2);
+  }
+  .threat-glitch.live::after {
+    color: var(--secondary);
+    transform: translate(1.5px, 0);
+    clip-path: inset(60% 0 0 0);
+    animation: glitch-rgb 0.4s steps(2);
+  }
+
+  /* ---------- SPARKLINE ---------- */
+  .bb-bar-row {
+    display: grid;
+    grid-template-columns: 3.5em 1fr 3em;
+    gap: 0.5em;
+    align-items: center;
+    margin-bottom: 0.32em;
+  }
+  .bb-bar-row .n { color: var(--text-dim); letter-spacing: 0.18em; font-size: 0.85em; }
+  .bb-bar-row .body {
+    position: relative;
+    height: 1.6em;
+    border: 1px solid var(--primary-faint);
+    background: rgba(0,240,255,0.03);
+    overflow: hidden;
+  }
+  .bb-bar-row .body .track {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, rgba(0,255,157,0.4), var(--primary));
+    opacity: 0.85;
+    box-shadow: 0 0 4px var(--primary-soft);
+    width: var(--w, 50%);
+    animation: bar-grow 3.4s cubic-bezier(.6,.2,.2,1) infinite alternate;
+  }
+  .bb-bar-row .body .spark {
+    position: absolute; left: 0; top: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+  .bb-bar-row .body .spark path {
+    fill: none;
+    stroke: var(--secondary);
+    stroke-width: 1;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 3px var(--secondary));
+    stroke-dasharray: 200;
+    stroke-dashoffset: 0;
+  }
+  .bb-bar-row .body .spark .dot {
+    fill: var(--tertiary);
+    filter: drop-shadow(0 0 4px var(--tertiary));
+  }
+  .bb-bar-row .pct {
+    color: var(--primary);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    font-size: 0.92em;
+  }
+
+  /* =========================================================
+     13. RESPONSIVE / SMALL VIEWPORTS
+     ========================================================= */
+  @media (max-width: 900px) {
+    .stage {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto 1fr auto auto;
+    }
+    .left-col { grid-column: 1; grid-row: 2; }
+    .right-col { grid-column: 1; grid-row: 4; }
+    .center-col { grid-column: 1; grid-row: 3; }
+    .bottom-bar { grid-template-columns: 1fr 1fr; grid-row: 5; }
+    .hud-center { width: min(86vmin, 96%); }
+  }
+  @media (max-width: 600px) {
+    .bottom-bar { grid-template-columns: 1fr; }
+    .tb-mid .tb-title { letter-spacing: 0.2em; }
+  }
+
+  /* =========================================================
+     14. REDUCED MOTION
+     ========================================================= */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
 </head>
 <body>
-  <p>Work in progress — OpenCode / MiniMax-M3 미션 대기 중</p>
+
+<!-- ================= v2.0 BOOT SEQUENCE ================= -->
+<div class="boot-overlay" id="boot-overlay">
+  <div class="scan"></div>
+  <div class="panel-boot">
+    <div class="boot-title">J.A.R.V.I.S. v3.7.2</div>
+    <div class="boot-sub">STARK INDUSTRIES // CYBERNETIC HUD</div>
+    <div class="boot-log" id="boot-log">
+      <!-- populated by JS, one line at a time -->
+    </div>
+    <div class="boot-progress">
+      <span class="track"><span class="fill"></span></span>
+      <span class="pct" id="boot-pct">0%</span>
+    </div>
+  </div>
+</div>
+
+<!-- ================= BACKGROUND LAYERS ================= -->
+<div class="bg-hex"></div>
+<div class="bg-grid"></div>
+<div class="bg-glow-tr"></div>
+<div class="bg-glow-bl"></div>
+<div class="bg-scanlines"></div>
+<div class="bg-scan-line"></div>
+<div class="bg-vignette"></div>
+<div class="bg-grain"></div>
+
+<!-- ================= v2.0 MATRIX RAIN ================= -->
+<div class="matrix-rain" id="matrix-rain" aria-hidden="true"></div>
+
+<!-- ================= CORNER BRACKETS ================= -->
+<div class="frame-corner fc-tl">
+  <svg viewBox="0 0 100 100" fill="none" stroke="#00f0ff" stroke-width="2">
+    <path d="M2 30 L2 2 L30 2" />
+    <path d="M14 2 L14 14 L2 14" opacity="0.4" />
+    <circle cx="2" cy="2" r="2" fill="#00f0ff" />
+  </svg>
+</div>
+<div class="frame-corner fc-tr">
+  <svg viewBox="0 0 100 100" fill="none" stroke="#00f0ff" stroke-width="2">
+    <path d="M2 30 L2 2 L30 2" />
+    <path d="M14 2 L14 14 L2 14" opacity="0.4" />
+    <circle cx="2" cy="2" r="2" fill="#00f0ff" />
+  </svg>
+</div>
+<div class="frame-corner fc-bl">
+  <svg viewBox="0 0 100 100" fill="none" stroke="#00f0ff" stroke-width="2">
+    <path d="M2 30 L2 2 L30 2" />
+    <path d="M14 2 L14 14 L2 14" opacity="0.4" />
+    <circle cx="2" cy="2" r="2" fill="#00f0ff" />
+  </svg>
+</div>
+<div class="frame-corner fc-br">
+  <svg viewBox="0 0 100 100" fill="none" stroke="#00f0ff" stroke-width="2">
+    <path d="M2 30 L2 2 L30 2" />
+    <path d="M14 2 L14 14 L2 14" opacity="0.4" />
+    <circle cx="2" cy="2" r="2" fill="#00f0ff" />
+  </svg>
+</div>
+
+<!-- ================= MAIN STAGE ================= -->
+<div class="stage">
+
+  <!-- ============ TOP STATUS BAR ============ -->
+  <header class="top-bar">
+    <div class="tb-cell tb-left">
+      <span class="dot"></span>
+      <span class="label">SYS</span>
+      <span class="val" id="sys-id">J.A.R.V.I.S. // STARK INDUSTRIES</span>
+      <span class="label">|</span>
+      <span class="val">v3.7.2</span>
+    </div>
+    <div class="tb-cell tb-mid">
+      <span class="tb-title">CYBERNETIC&nbsp;HUD</span>
+      <span class="tb-subtitle"><span id="clock-date">2075-03-14</span> // <span id="clock-time">02:47:13 UTC</span></span>
+    </div>
+    <div class="tb-cell tb-right">
+      <span class="label">THREAT</span>
+      <span class="threat-meter" aria-label="threat level">
+        <span class="threat-bars" id="threat-bars">
+          <span></span><span></span><span></span><span></span><span></span>
+        </span>
+        <span class="val threat-glitch" id="threat-level" data-text="ELEVATED">ELEVATED</span>
+      </span>
+      <span class="label">|</span>
+      <span class="dot" id="auth-dot"></span>
+      <span class="label">AUTH</span>
+      <span class="val" id="auth-status">FINGERPRINT OK</span>
+    </div>
+  </header>
+
+  <!-- ============ LEFT COLUMN ============ -->
+  <aside class="left-col">
+
+    <!-- SYSTEM DIAGNOSTICS -->
+    <section class="panel">
+      <div class="panel-title">
+        <span><span class="ico"></span>SYSTEM DIAGNOSTICS</span>
+        <span class="meta" id="diag-meta">N=12 / OK</span>
+      </div>
+      <ul class="diag-list" id="diag-list">
+        <!-- populated by JS to enable animation of --w-lo/--w-hi -->
+      </ul>
+    </section>
+
+    <!-- STAT GRID -->
+    <section class="panel">
+      <div class="panel-title">
+        <span><span class="ico"></span>SYS METRICS</span>
+        <span class="meta" id="sys-metrics-meta">μ=2.4ms</span>
+      </div>
+      <div class="stat-grid">
+        <div class="stat"><div class="k">UPTIME</div><div class="v" id="uptime">142:08:37</div></div>
+        <div class="stat"><div class="k">PACKETS</div><div class="v" id="packets">2,847,193</div></div>
+        <div class="stat"><div class="k">LATENCY</div><div class="v">3.1<span class="u">ms</span></div></div>
+        <div class="stat"><div class="k">NODES</div><div class="v" id="nodes">1,284</div></div>
+      </div>
+    </section>
+
+    <!-- NETWORK GRAPH -->
+    <section class="panel">
+      <div class="panel-title">
+        <span><span class="ico"></span>NET MAP // TIER 3</span>
+        <span class="meta">SCAN ⊕</span>
+      </div>
+      <div class="net-graph">
+        <svg viewBox="0 0 200 160" preserveAspectRatio="xMidYMid meet" fill="none">
+          <!-- grid -->
+          <defs>
+            <pattern id="ng-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(0,240,255,0.08)" stroke-width="0.5"/>
+            </pattern>
+            <radialGradient id="ng-core" cx="50%" cy="50%">
+              <stop offset="0%" stop-color="#00ff9d" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="#00ff9d" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <rect width="200" height="160" fill="url(#ng-grid)"/>
+          <!-- edges -->
+          <g stroke="#00f0ff" stroke-width="0.6" opacity="0.6">
+            <line x1="100" y1="80" x2="30"  y2="30"/>
+            <line x1="100" y1="80" x2="170" y2="40"/>
+            <line x1="100" y1="80" x2="40"  y2="130"/>
+            <line x1="100" y1="80" x2="160" y2="125"/>
+            <line x1="100" y1="80" x2="100" y2="20"/>
+            <line x1="100" y1="80" x2="100" y2="140"/>
+            <line x1="100" y1="80" x2="20"  y2="80"/>
+            <line x1="100" y1="80" x2="180" y2="80"/>
+            <line x1="30"  y1="30"  x2="100" y2="20"  stroke-dasharray="2 2"/>
+            <line x1="170" y1="40"  x2="180" y2="80"  stroke-dasharray="2 2"/>
+            <line x1="160" y1="125" x2="100" y2="140" stroke-dasharray="2 2"/>
+            <line x1="40"  y1="130" x2="20"  y2="80"  stroke-dasharray="2 2"/>
+          </g>
+          <!-- traveling pulses along edges (offset-path) -->
+          <g>
+            <circle r="1.4" fill="#00ff9d">
+              <animateMotion dur="3.2s" repeatCount="indefinite" path="M100,80 L30,30 L100,20"/>
+            </circle>
+            <circle r="1.4" fill="#00ff9d">
+              <animateMotion dur="4.0s" repeatCount="indefinite" path="M100,80 L170,40 L180,80"/>
+            </circle>
+            <circle r="1.4" fill="#ffaa00">
+              <animateMotion dur="3.8s" repeatCount="indefinite" path="M100,80 L40,130 L20,80"/>
+            </circle>
+            <circle r="1.4" fill="#ff2e63">
+              <animateMotion dur="2.6s" repeatCount="indefinite" path="M100,80 L160,125 L100,140"/>
+            </circle>
+          </g>
+          <!-- nodes -->
+          <g>
+            <circle cx="100" cy="80" r="14" fill="url(#ng-core)"/>
+            <circle cx="100" cy="80" r="6"  fill="none" stroke="#00ff9d" stroke-width="1"/>
+            <circle cx="100" cy="80" r="3"  fill="#00ff9d"/>
+
+            <circle cx="30"  cy="30"  r="3.5" fill="#0a1820" stroke="#00f0ff" stroke-width="1"/>
+            <circle cx="170" cy="40"  r="3.5" fill="#0a1820" stroke="#00f0ff" stroke-width="1"/>
+            <circle cx="40"  cy="130" r="3.5" fill="#0a1820" stroke="#00f0ff" stroke-width="1"/>
+            <circle cx="160" cy="125" r="3.5" fill="#0a1820" stroke="#00f0ff" stroke-width="1"/>
+            <circle cx="100" cy="20"  r="3.5" fill="#0a1820" stroke="#00f0ff" stroke-width="1"/>
+            <circle cx="100" cy="140" r="3.5" fill="#0a1820" stroke="#00f0ff" stroke-width="1"/>
+            <circle cx="20"  cy="80"  r="3.5" fill="#0a1820" stroke="#00f0ff" stroke-width="1"/>
+            <circle cx="180" cy="80"  r="3.5" fill="#0a1820" stroke="#00f0ff" stroke-width="1"/>
+          </g>
+          <!-- node labels -->
+          <g fill="#4a7a8a" font-family="monospace" font-size="6" letter-spacing="0.5">
+            <text x="34"  y="26">A1</text>
+            <text x="160" y="36">B2</text>
+            <text x="46"  y="138">C3</text>
+            <text x="148" y="132">D4</text>
+            <text x="106" y="16">HQ</text>
+            <text x="106" y="152">RT</text>
+            <text x="6"   y="92">E5</text>
+            <text x="172" y="92">F6</text>
+          </g>
+        </svg>
+      </div>
+    </section>
+
+  </aside>
+
+  <!-- ============ CENTER HUD ============ -->
+  <main class="center-col">
+    <div class="hud-center">
+
+      <!-- readouts floating around the rings -->
+      <div class="readouts">
+        <div class="ro r1"><span class="bar"><span style="--w:78%"></span></span><span>SIG 78%</span></div>
+        <div class="ro r2"><span class="bar"><span style="--w:42%"></span></span><span>DEC 42%</span></div>
+        <div class="ro r3"><span class="bar"><span style="--w:91%"></span></span><span>ENC 91%</span></div>
+        <div class="ro r4"><span class="bar"><span style="--w:24%"></span></span><span>HEX 24%</span></div>
+        <div class="ro r5"><span class="bar"><span style="--w:65%"></span></span><span>SYN 65%</span></div>
+        <div class="ro r6"><span class="bar"><span style="--w:55%"></span></span><span>CHK 55%</span></div>
+      </div>
+
+      <!-- RING 1: outermost — slow CW, dashed march, tick marks -->
+      <div class="ring ring-1">
+        <svg viewBox="-100 -100 200 200" fill="none" stroke="#00f0ff">
+          <defs>
+            <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%"  stop-color="#00f0ff" stop-opacity="0.95"/>
+              <stop offset="100%" stop-color="#00f0ff" stop-opacity="0.45"/>
+            </linearGradient>
+          </defs>
+          <!-- outer ring -->
+          <circle cx="0" cy="0" r="92" stroke="url(#g1)" stroke-width="0.6" stroke-dasharray="1 3" class="dash-march"/>
+          <!-- major tick marks (every 30°) -->
+          <g stroke="#00f0ff" stroke-width="1">
+            <line x1="0" y1="-98" x2="0" y2="-86"/>
+            <line x1="0" y1="98"  x2="0" y2="86"/>
+            <line x1="-98" y1="0" x2="-86" y2="0"/>
+            <line x1="98"  y1="0" x2="86"  y2="0"/>
+          </g>
+          <g stroke="#00f0ff" stroke-width="0.6" opacity="0.7">
+            <!-- 30/60/120/150 -->
+            <line x1="49"  y1="-85" x2="43" y2="-74.4" transform="rotate(0)"/>
+            <line x1="85"  y1="-49" x2="74.4" y2="-43" transform="rotate(0)"/>
+            <line x1="85"  y1="49"  x2="74.4" y2="43" transform="rotate(0)"/>
+            <line x1="49"  y1="85"  x2="43" y2="74.4" transform="rotate(0)"/>
+            <line x1="-49" y1="85"  x2="-43" y2="74.4" transform="rotate(0)"/>
+            <line x1="-85" y1="49"  x2="-74.4" y2="43" transform="rotate(0)"/>
+            <line x1="-85" y1="-49" x2="-74.4" y2="-43" transform="rotate(0)"/>
+            <line x1="-49" y1="-85" x2="-43" y2="-74.4" transform="rotate(0)"/>
+          </g>
+          <!-- coordinate tags -->
+          <g fill="#00f0ff" font-family="monospace" font-size="4.5" letter-spacing="0.5" opacity="0.8">
+            <text x="0" y="-100" text-anchor="middle">N · 00</text>
+            <text x="0" y="104"  text-anchor="middle">S · 180</text>
+            <text x="-100" y="1.5" text-anchor="middle">W · 270</text>
+            <text x="100"  y="1.5" text-anchor="middle">E · 090</text>
+          </g>
+        </svg>
+      </div>
+
+      <!-- RING 2: arc segments + tick marks, CCW -->
+      <div class="ring ring-2">
+        <svg viewBox="-100 -100 200 200" fill="none" stroke="#00f0ff">
+          <circle cx="0" cy="0" r="78" stroke="#00f0ff" stroke-width="0.4" stroke-dasharray="2 4" opacity="0.6"/>
+          <!-- arc segments (progress-style) -->
+          <circle cx="0" cy="0" r="78" stroke="#00f0ff" stroke-width="1.6" stroke-linecap="round"
+                  stroke-dasharray="180 490" transform="rotate(-90)"/>
+          <circle cx="0" cy="0" r="78" stroke="#ffaa00" stroke-width="1.6" stroke-linecap="round"
+                  stroke-dasharray="60 610" transform="rotate(70)" opacity="0.9"/>
+          <circle cx="0" cy="0" r="78" stroke="#ff2e63" stroke-width="1.6" stroke-linecap="round"
+                  stroke-dasharray="30 640" transform="rotate(180)" opacity="0.9"/>
+          <!-- tick marks every 6° (60 ticks total) -->
+          <g stroke="#00f0ff" stroke-width="0.4" opacity="0.5">
+            <!-- generated via JS; placeholder static ticks -->
+          </g>
+          <!-- small node bullets on the ring -->
+          <g>
+            <circle cx="0"   cy="-78" r="2" fill="#00f0ff"/>
+            <circle cx="67.5" cy="-39" r="1.6" fill="#00ff9d" class="pulse-fast"/>
+            <circle cx="67.5" cy="39"  r="1.6" fill="#ffaa00"/>
+            <circle cx="0"   cy="78"  r="1.6" fill="#00f0ff"/>
+            <circle cx="-67.5" cy="39"  r="1.6" fill="#ff2e63" class="pulse-fast"/>
+            <circle cx="-67.5" cy="-39" r="1.6" fill="#00f0ff"/>
+          </g>
+        </svg>
+      </div>
+
+      <!-- RING 3: dashed mid-ring with marching ants + radial spokes -->
+      <div class="ring ring-3">
+        <svg viewBox="-100 -100 200 200" fill="none" stroke="#00f0ff">
+          <circle cx="0" cy="0" r="62" stroke="#00f0ff" stroke-width="0.8" stroke-dasharray="6 4" class="dash-march"/>
+          <circle cx="0" cy="0" r="62" stroke="#00f0ff" stroke-width="0.4" opacity="0.4"/>
+          <!-- radial spokes (8) -->
+          <g stroke="#00f0ff" stroke-width="0.5" opacity="0.7">
+            <line x1="0" y1="-62" x2="0" y2="-44"/>
+            <line x1="0" y1="62"  x2="0" y2="44"/>
+            <line x1="-62" y1="0" x2="-44" y2="0"/>
+            <line x1="62"  y1="0" x2="44"  y2="0"/>
+            <line x1="43.8" y1="-43.8" x2="31.1" y2="-31.1"/>
+            <line x1="43.8" y1="43.8"  x2="31.1" y2="31.1"/>
+            <line x1="-43.8" y1="43.8" x2="-31.1" y2="31.1"/>
+            <line x1="-43.8" y1="-43.8" x2="-31.1" y2="-31.1"/>
+          </g>
+        </svg>
+      </div>
+
+      <!-- RING 4: polygon ring (octagon) — slow CW -->
+      <div class="ring ring-4">
+        <svg viewBox="-100 -100 200 200" fill="none" stroke="#00f0ff">
+          <polygon points="48.3,-29.5 29.5,-48.3 0,-58 -29.5,-48.3 -48.3,-29.5 -58,0 -48.3,29.5 -29.5,48.3 0,58 29.5,48.3 48.3,29.5 58,0"
+                   stroke="#00f0ff" stroke-width="0.7" opacity="0.7"/>
+          <polygon points="40.4,-24.7 24.7,-40.4 0,-48.5 -24.7,-40.4 -40.4,-24.7 -48.5,0 -40.4,24.7 -24.7,40.4 0,48.5 24.7,40.4 40.4,24.7 48.5,0"
+                   stroke="#00ff9d" stroke-width="0.5" stroke-dasharray="3 2" class="dash-march-rev" opacity="0.7"/>
+          <!-- vertex dots -->
+          <g fill="#00f0ff">
+            <circle cx="48.3" cy="-29.5" r="1.3"/>
+            <circle cx="29.5" cy="-48.3" r="1.3"/>
+            <circle cx="0"   cy="-58"   r="1.3"/>
+            <circle cx="-29.5" cy="-48.3" r="1.3"/>
+            <circle cx="-48.3" cy="-29.5" r="1.3"/>
+            <circle cx="-58"  cy="0"    r="1.3"/>
+            <circle cx="-48.3" cy="29.5" r="1.3"/>
+            <circle cx="-29.5" cy="48.3" r="1.3"/>
+            <circle cx="0"   cy="58"   r="1.3"/>
+            <circle cx="29.5" cy="48.3" r="1.3"/>
+            <circle cx="48.3" cy="29.5" r="1.3"/>
+            <circle cx="58"  cy="0"    r="1.3"/>
+          </g>
+        </svg>
+      </div>
+
+      <!-- RING 5: innermost — fast CW with geometric ticks -->
+      <div class="ring ring-5">
+        <svg viewBox="-100 -100 200 200" fill="none" stroke="#00f0ff">
+          <circle cx="0" cy="0" r="42" stroke="#00f0ff" stroke-width="0.4" opacity="0.5"/>
+          <circle cx="0" cy="0" r="42" stroke="#00ff9d" stroke-width="1.4" stroke-linecap="round"
+                  stroke-dasharray="220 264" transform="rotate(-90)" class="dash-march-fast"/>
+          <!-- 24 short ticks -->
+          <g stroke="#00f0ff" stroke-width="0.6" opacity="0.85">
+            <g transform="rotate(0)"><line x1="0" y1="-44" x2="0" y2="-38"/></g>
+            <g transform="rotate(15)"><line x1="0" y1="-44" x2="0" y2="-40" opacity="0.5"/></g>
+            <g transform="rotate(30)"><line x1="0" y1="-44" x2="0" y2="-40" opacity="0.5"/></g>
+            <g transform="rotate(45)"><line x1="0" y1="-44" x2="0" y2="-38"/></g>
+            <g transform="rotate(60)"><line x1="0" y1="-44" x2="0" y2="-40" opacity="0.5"/></g>
+            <g transform="rotate(75)"><line x1="0" y1="-44" x2="0" y2="-40" opacity="0.5"/></g>
+            <g transform="rotate(90)"><line x1="0" y1="-44" x2="0" y2="-38"/></g>
+            <g transform="rotate(105)"><line x1="0" y1="-44" x2="0" y2="-40" opacity="0.5"/></g>
+            <g transform="rotate(120)"><line x1="0" y1="-44" x2="0" y2="-40" opacity="0.5"/></g>
+            <g transform="rotate(135)"><line x1="0" y1="-44" x2="0" y2="-38"/></g>
+            <g transform="rotate(150)"><line x1="0" y1="-44" x2="0" y2="-40" opacity="0.5"/></g>
+            <g transform="rotate(165)"><line x1="0" y1="-44" x2="0" y2="-40" opacity="0.5"/></g>
+            <g transform="rotate(180)"><line x1="0" y1="-44" x2="0" y2="-38"/></g>
+            <g transform="rotate(195)"><line x1="0" y1="-44" x2="0" y2="-40" opacity="0.5"/></g>
+            <g transform="rotate(210)"><line x1="0" y1="-44" x2="0" y2="-40" opacity="0.5"/></g>
+            <g transform="rotate(225)"><line x1="0" y1="-44" x2="0" y2="-38"/></g>
+            <g transform="rotate(240)"><line x1="0" y1="-44" x2="0" y2="-40" opacity="0.5"/></g>
+            <g transform="rotate(255)"><line x1="0" y1="-44" x2="0" y2="-40" opacity="0.5"/></g>
+            <g transform="rotate(270)"><line x1="0" y1="-44" x2="0" y2="-38"/></g>
+            <g transform="rotate(285)"><line x1="0" y1="-44" x2="0" y2="-40" opacity="0.5"/></g>
+            <g transform="rotate(300)"><line x1="0" y1="-44" x2="0" y2="-40" opacity="0.5"/></g>
+            <g transform="rotate(315)"><line x1="0" y1="-44" x2="0" y2="-38"/></g>
+            <g transform="rotate(330)"><line x1="0" y1="-44" x2="0" y2="-40" opacity="0.5"/></g>
+            <g transform="rotate(345)"><line x1="0" y1="-44" x2="0" y2="-40" opacity="0.5"/></g>
+          </g>
+        </svg>
+      </div>
+
+      <!-- Radar sweep overlay -->
+      <div class="radar-sweep"></div>
+
+      <!-- v2.0: 3D wireframe icosahedron (replaces hex reticle) -->
+      <div class="iso-container" id="iso-container" aria-hidden="true">
+        <!-- 30 edges + 12 vertices injected by JS (buildIcosahedron) -->
+        <!-- inner solid wireframe for depth -->
+        <div class="iso-inner">
+          <svg viewBox="-50 -50 100 100" fill="none" stroke="#00f0ff">
+            <polygon points="0,-22 19,-11 19,11 0,22 -19,11 -19,-11"
+                     stroke="#00ff9d" stroke-width="0.8" opacity="0.85"/>
+            <polygon points="0,-32 27.7,-16 27.7,16 0,32 -27.7,16 -27.7,-16"
+                     stroke="#00f0ff" stroke-width="0.5" stroke-dasharray="2 2" class="dash-march-fast" opacity="0.6"/>
+            <text x="0" y="3" text-anchor="middle" fill="#00f0ff"
+                  font-family="monospace" font-size="6" letter-spacing="1">TGT-001</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Pulsing core -->
+      <div class="core-ring"></div>
+      <div class="core"></div>
+
+      <!-- Coord tag -->
+      <div class="coord-tag" id="coord-tag">LAT 34.0522°N // LON 118.2437°W // ALT 71.2M</div>
+
+    </div>
+  </main>
+
+  <!-- ============ RIGHT COLUMN ============ -->
+  <aside class="right-col">
+
+    <!-- DATA STREAM -->
+    <section class="panel">
+      <div class="panel-title">
+        <span><span class="ico"></span>DATA STREAM</span>
+        <span class="meta">BAUD 115200</span>
+      </div>
+      <div class="stream-wrap">
+        <div class="stream" id="data-stream"></div>
+      </div>
+    </section>
+
+    <!-- ACCESS LOG -->
+    <section class="panel">
+      <div class="panel-title">
+        <span><span class="ico"></span>ACCESS LOG</span>
+        <span class="meta" id="log-meta">live</span>
+      </div>
+      <ul class="log-list" id="log-list"></ul>
+    </section>
+
+    <!-- FILE SYSTEM -->
+    <section class="panel">
+      <div class="panel-title">
+        <span><span class="ico"></span>FILE INDEX</span>
+        <span class="meta">/VAULT</span>
+      </div>
+      <ul class="files" id="files-list"></ul>
+    </section>
+
+  </aside>
+
+  <!-- ============ BOTTOM BAR ============ -->
+  <footer class="bottom-bar">
+
+    <!-- Process Bars -->
+    <div class="bb-block">
+      <div class="bb-label"><span>PROCESS LOAD</span><span class="v" id="proc-load">Σ 84%</span></div>
+      <div class="bb-bars">
+        <div class="bb-bar-row">
+          <span class="n">CPU</span>
+          <span class="body">
+            <span class="track" style="--w:62%; --w-lo:42%; --w-hi:78%"></span>
+            <svg class="spark" id="spark-cpu" viewBox="0 0 100 30" preserveAspectRatio="none">
+              <path d=""></path>
+              <circle class="dot" cx="0" cy="0" r="1.4"></circle>
+            </svg>
+          </span>
+          <span class="pct" id="cpu-pct">62%</span>
+        </div>
+        <div class="bb-bar-row">
+          <span class="n">MEM</span>
+          <span class="body">
+            <span class="track" style="--w:74%; --w-lo:60%; --w-hi:86%"></span>
+            <svg class="spark" id="spark-mem" viewBox="0 0 100 30" preserveAspectRatio="none">
+              <path d=""></path>
+              <circle class="dot" cx="0" cy="0" r="1.4"></circle>
+            </svg>
+          </span>
+          <span class="pct" id="mem-pct">74%</span>
+        </div>
+        <div class="bb-bar-row">
+          <span class="n">DSK</span>
+          <span class="body">
+            <span class="track" style="--w:48%; --w-lo:38%; --w-hi:58%"></span>
+            <svg class="spark" id="spark-dsk" viewBox="0 0 100 30" preserveAspectRatio="none">
+              <path d=""></path>
+              <circle class="dot" cx="0" cy="0" r="1.4"></circle>
+            </svg>
+          </span>
+          <span class="pct" id="dsk-pct">48%</span>
+        </div>
+        <div class="bb-bar-row">
+          <span class="n">NET</span>
+          <span class="body">
+            <span class="track" style="--w:88%; --w-lo:62%; --w-hi:96%"></span>
+            <svg class="spark" id="spark-net" viewBox="0 0 100 30" preserveAspectRatio="none">
+              <path d=""></path>
+              <circle class="dot" cx="0" cy="0" r="1.4"></circle>
+            </svg>
+          </span>
+          <span class="pct" id="net-pct">88%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Oscilloscope -->
+    <div class="bb-block">
+      <div class="bb-label"><span>OSCILLOSCOPE // BIO-SIGNAL</span><span class="v">72 BPM</span></div>
+      <div class="scope">
+        <svg viewBox="0 0 800 60" preserveAspectRatio="none">
+          <!-- grid -->
+          <g stroke="rgba(0,240,255,0.08)" stroke-width="0.5">
+            <line x1="0" y1="15" x2="800" y2="15"/>
+            <line x1="0" y1="30" x2="800" y2="30"/>
+            <line x1="0" y1="45" x2="800" y2="45"/>
+            <line x1="200" y1="0" x2="200" y2="60"/>
+            <line x1="400" y1="0" x2="400" y2="60"/>
+            <line x1="600" y1="0" x2="600" y2="60"/>
+          </g>
+          <!-- primary waveform (animated via path d) -->
+          <path id="scope-path"
+                d="M0,30 L40,30 L50,28 L60,32 L70,18 L80,40 L90,22 L100,36 L110,14 L120,42 L130,28 L140,32 L150,18 L160,40 L170,24 L180,38 L190,16 L200,44 L210,26 L220,34 L230,20 L240,42 L250,24 L260,36 L270,18 L280,40 L290,28 L300,32 L310,20 L320,38 L330,26 L340,34 L350,16 L360,42 L370,28 L380,32 L390,18 L400,40 L410,24 L420,36 L430,20 L440,38 L450,26 L460,34 L470,16 L480,42 L490,28 L500,32 L510,18 L520,40 L530,24 L540,36 L550,20 L560,38 L570,26 L580,34 L590,16 L600,42 L610,28 L620,32 L630,18 L640,40 L650,24 L660,36 L670,20 L680,38 L690,26 L700,34 L710,18 L720,42 L730,28 L740,32 L750,20 L760,40 L770,24 L780,36 L790,30 L800,30"
+                fill="none" stroke="#00f0ff" stroke-width="1.2"
+                style="filter: drop-shadow(0 0 3px #00f0ff);"/>
+          <!-- secondary dim line -->
+          <path d="M0,45 L800,15" fill="none" stroke="rgba(0,240,255,0.25)" stroke-width="0.5" stroke-dasharray="3 3"/>
+          <!-- moving cursor -->
+          <line x1="0" y1="0" x2="0" y2="60" stroke="#00ff9d" stroke-width="0.8" opacity="0.8">
+            <animate attributeName="x1" values="0;800;0" dur="6s" repeatCount="indefinite"/>
+            <animate attributeName="x2" values="0;800;0" dur="6s" repeatCount="indefinite"/>
+          </line>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Threat Assessment -->
+    <div class="bb-block">
+      <div class="bb-label"><span>THREAT ASSESSMENT</span><span class="v" id="threat-assess">CODE-YELLOW</span></div>
+      <div class="bb-assess">
+        <div class="assess-cell ok"><div class="k">FIREWALL</div><div class="v">A+</div></div>
+        <div class="assess-cell ok"><div class="k">ENCRYPT</div><div class="v">AES-512</div></div>
+        <div class="assess-cell warn"><div class="k">PROXIES</div><div class="v">3/7</div></div>
+        <div class="assess-cell crit"><div class="k">INTRUSION</div><div class="v">2</div></div>
+      </div>
+    </div>
+
+    <!-- GPS / Position -->
+    <div class="bb-block">
+      <div class="bb-label"><span>POSITION</span><span class="v">LOCK ⊕</span></div>
+      <div class="gps">
+        <div><span class="k">LAT</span><span class="v" id="gps-lat">34.0522°N</span></div>
+        <div><span class="k">LON</span><span class="v" id="gps-lon">118.2437°W</span></div>
+        <div><span class="k">ALT</span><span class="v" id="gps-alt">71.2m</span></div>
+        <div><span class="k">VEL</span><span class="v" id="gps-vel">0.41 m/s</span></div>
+        <div><span class="k">HDG</span><span class="v" id="gps-hdg">N 47°E</span></div>
+        <div><span class="k">PITCH</span><span class="v" id="gps-pitch">+1.2°</span></div>
+      </div>
+    </div>
+
+  </footer>
+</div>
+
+<!-- ================= WARNING STACK ================= -->
+<div class="warning-stack" id="warning-stack"></div>
+
+<!-- ================= MINIMAL JS ================= -->
+<script>
+(() => {
+  'use strict';
+
+  /* ---------- helpers ---------- */
+  const $  = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const rand = (min, max) => Math.random() * (max - min) + min;
+  const irand = (min, max) => Math.floor(rand(min, max + 1));
+  const pick = (arr) => arr[irand(0, arr.length - 1)];
+  const hex  = (n) => '0123456789ABCDEF'[irand(0, 15)];
+  const pad  = (n, w = 2) => String(n).padStart(w, '0');
+
+  /* ---------- 1. clock ---------- */
+  function tickClock() {
+    const now = new Date();
+    const y = now.getUTCFullYear();
+    const m = pad(now.getUTCMonth() + 1);
+    const d = pad(now.getUTCDate());
+    const hh = pad(now.getUTCHours());
+    const mm = pad(now.getUTCMinutes());
+    const ss = pad(now.getUTCSeconds());
+    $('#clock-date').textContent = `${y}-${m}-${d}`;
+    $('#clock-time').textContent = `${hh}:${mm}:${ss} UTC`;
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  /* ---------- 2. diagnostics ---------- */
+  const DIAG = [
+    { name: 'KERNEL',     lo: 22, hi: 58 },
+    { name: 'QUANTUM',    lo: 18, hi: 64 },
+    { name: 'FIREWALL',   lo: 60, hi: 92 },
+    { name: 'DECRYPTOR',  lo: 12, hi: 78 },
+    { name: 'FIREWIRE',   lo: 28, hi: 70 },
+    { name: 'PROXIES',    lo: 40, hi: 80 },
+    { name: 'BACKDOOR',   lo: 10, hi: 50 },
+    { name: 'SCAVENGER',  lo: 30, hi: 88 },
+  ];
+  function renderDiag() {
+    const list = $('#diag-list');
+    DIAG.forEach((d, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <span class="name">${d.name}</span>
+        <span class="bar"><span style="--w-lo:${d.lo}%; --w-hi:${d.hi}%"></span></span>
+        <span class="pct" data-diag="${i}">--</span>
+      `;
+      list.appendChild(li);
+    });
+  }
+  function updateDiag() {
+    DIAG.forEach((d, i) => {
+      const pct = irand(d.lo, d.hi);
+      const el = document.querySelector(`[data-diag="${i}"]`);
+      if (el) el.textContent = `${pct}%`;
+    });
+    // meta
+    $('#diag-meta').textContent = `N=${DIAG.length} / OK`;
+  }
+  renderDiag();
+  updateDiag();
+  setInterval(updateDiag, 2200);
+
+  /* ---------- 3. sys metrics ---------- */
+  let packets = 2847193;
+  let nodes   = 1284;
+  function updateSysMetrics() {
+    packets += irand(40, 240);
+    nodes   += irand(-2, 5);
+    if (nodes < 1200) nodes = 1200;
+    $('#packets').textContent = packets.toLocaleString();
+    $('#nodes').textContent   = nodes.toLocaleString();
+  }
+  setInterval(updateSysMetrics, 1400);
+
+  /* ---------- 4. uptime (HH:MM:SS) ---------- */
+  let upSec = 142 * 3600 + 8 * 60 + 37;
+  setInterval(() => {
+    upSec += 1;
+    const h = Math.floor(upSec / 3600);
+    const m = Math.floor((upSec % 3600) / 60);
+    const s = upSec % 60;
+    $('#uptime').textContent = `${pad(h,3)}:${pad(m)}:${pad(s)}`;
+  }, 1000);
+
+  /* ---------- 5. process bars (CPU/MEM/DSK/NET) ---------- */
+  function jitterBar(elId, lo, hi, suffix = '%') {
+    const el = document.getElementById(elId);
+    if (el) el.textContent = `${irand(lo, hi)}${suffix}`;
+  }
+  setInterval(() => {
+    jitterBar('cpu-pct', 42, 78);
+    jitterBar('mem-pct', 60, 86);
+    jitterBar('dsk-pct', 38, 58);
+    jitterBar('net-pct', 62, 96);
+    const total = Math.round((
+      parseInt($('#cpu-pct').textContent) +
+      parseInt($('#mem-pct').textContent) +
+      parseInt($('#dsk-pct').textContent) +
+      parseInt($('#net-pct').textContent)
+    ) / 4);
+    $('#proc-load').textContent = `Σ ${total}%`;
+  }, 1700);
+
+  /* ---------- 6. data stream (hex lines) ---------- */
+  const STREAM_HEADERS = [
+    'TX', 'RX', 'ACK', 'SYN', 'FIN', 'RST', 'PSH', 'URG',
+    'GET', 'POST', 'PUT', 'DEL', 'HEAD', 'OPT',
+    'ENC', 'DEC', 'SHA', 'MD5', 'AES', 'RSA',
+    'PKT', 'FRM', 'CHUNK', 'PIPE'
+  ];
+  const STATUS = ['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'WARN', 'ERR', '200', '204', '301', '403', '404', '500'];
+  function streamLine() {
+    const head = pick(STREAM_HEADERS);
+    const code = irand(100, 9999).toString(16).toUpperCase().padStart(4, '0');
+    const addr = `${irand(1,255)}.${irand(0,255)}.${irand(0,255)}.${irand(1,254)}`;
+    const port = irand(20, 9999);
+    const hex1 = Array.from({length: 8}, () => hex()).join('');
+    const status = pick(STATUS);
+    const klass = status === 'ERR' || status === '500' ? 'crit'
+                : status === 'WARN' || status === '403' ? 'warn'
+                : head === 'ENC' || head === 'SHA' ? 'head' : '';
+    const t = pad(irand(0,23)) + ':' + pad(irand(0,59)) + ':' + pad(irand(0,59));
+    return `<span class="line ${klass}">[${t}] ${head} ${code} :: ${addr}:${port} <span style="opacity:0.5">//</span> 0x${hex1} <span style="opacity:0.6">[${status}]</span></span>`;
+  }
+  function buildStream() {
+    const el = $('#data-stream');
+    // produce enough lines to fill twice the wrap so the loop is seamless
+    const lines = [];
+    for (let i = 0; i < 80; i++) lines.push(streamLine());
+    el.innerHTML = lines.join('');
+  }
+  buildStream();
+  setInterval(() => {
+    const el = $('#data-stream');
+    // prepend a fresh line, drop tail so total length stays constant
+    const tmp = document.createElement('div');
+    tmp.innerHTML = streamLine();
+    el.prepend(tmp.firstChild);
+    while (el.children.length > 80) el.removeChild(el.lastChild);
+  }, 380);
+
+  /* ---------- 7. access log ---------- */
+  const LOG_MSGS = [
+    ['AUTH.HANDSHAKE',       'ok'],
+    ['USER.SESSION.RENEW',   'ok'],
+    ['PROC.SPAWN',           'ok'],
+    ['KERNEL.SIGNAL',        'ok'],
+    ['FIREWALL.BLOCK',       'warn'],
+    ['INTRUSION.ATTEMPT',    'crit'],
+    ['PKT.DROP',             'warn'],
+    ['CACHE.INVALIDATE',     'ok'],
+    ['VAULT.UNLOCK',         'ok'],
+    ['NODE.SCAN',            'ok'],
+    ['PROXY.ROTATE',         'ok'],
+    ['SSL.RENEGOTIATE',      'ok'],
+    ['GEO.WARN',             'warn'],
+    ['SANDBOX.SPAWN',        'ok'],
+    ['TRACE.INIT',           'crit'],
+  ];
+  function logLine() {
+    const [msg, st] = pick(LOG_MSGS);
+    const t = pad(irand(0,23)) + ':' + pad(irand(0,59)) + ':' + pad(irand(0,59));
+    return `<li class="l"><span class="t">${t}</span><span class="m">${msg}</span><span class="s ${st}">${st.toUpperCase()}</span></li>`;
+  }
+  function buildLog() {
+    const el = $('#log-list');
+    const lines = [];
+    for (let i = 0; i < 18; i++) lines.push(logLine());
+    el.innerHTML = lines.join('');
+  }
+  buildLog();
+  setInterval(() => {
+    const el = $('#log-list');
+    const tmp = document.createElement('div');
+    tmp.innerHTML = logLine();
+    el.prepend(tmp.firstChild);
+    while (el.children.length > 18) el.removeChild(el.lastChild);
+  }, 1500);
+
+  /* ---------- 8. file index ---------- */
+  const FILES = [
+    ['jarvis.kern',         '4.2M', 'lock'],
+    ['iron.man.suite.exe',  '128M', 'ok'],
+    ['stark.tower.bak',     '892M', 'ok'],
+    ['arc.reactor.core',    '2.1M', 'lock'],
+    ['pepper.potts.dat',    '64K',  'lock'],
+    ['war.machine.proto',   '16.7M','ok'],
+    ['jarvis.voice.v3',     '12.3M','ok'],
+    ['avengers.init',       '32K',  'ok'],
+    ['quantum.tunnel.key',  '1B',   'crit'],
+    ['hydra.protocol.x',    '8K',   'crit'],
+    ['si.network.map',      '256M', 'ok'],
+    ['black.widow.cred',    '4K',   'crit'],
+    ['hulk.gamma.calib',    '512K', 'lock'],
+    ['vision.synapse.bin',  '22M',  'ok'],
+    ['shield.cleared.log',  '2.3M', 'ok'],
+  ];
+  function buildFiles() {
+    const el = $('#files-list');
+    el.innerHTML = FILES.map(([n, sz, st]) =>
+      `<li><span class="n">${n}</span><span class="sz">${sz}</span><span class="st ${st}">${st.toUpperCase()}</span></li>`
+    ).join('');
+  }
+  buildFiles();
+
+  /* ---------- 9. GPS micro-jitter ---------- */
+  setInterval(() => {
+    const lat = (34.0522 + rand(-0.0009, 0.0009)).toFixed(4);
+    const lon = (-118.2437 + rand(-0.0009, 0.0009)).toFixed(4);
+    const alt = (71.2 + rand(-1.5, 1.5)).toFixed(1);
+    const vel = (0.41 + rand(-0.15, 0.15)).toFixed(2);
+    const hdg = irand(0, 359);
+    const pit = (rand(-2.5, 2.5)).toFixed(1);
+    $('#gps-lat').textContent   = `${lat}°N`;
+    $('#gps-lon').textContent   = `${Math.abs(lon)}°W`;
+    $('#gps-alt').textContent   = `${alt}m`;
+    $('#gps-vel').textContent   = `${vel} m/s`;
+    $('#gps-hdg').textContent   = `${hdg}°`;
+    $('#gps-pitch').textContent = `${pit > 0 ? '+' : ''}${pit}°`;
+    $('#coord-tag').textContent = `LAT ${lat}°N // LON ${Math.abs(lon)}°W // ALT ${alt}M`;
+  }, 1300);
+
+  /* ---------- 10. threat level ---------- */
+  const THREATS = [
+    { label: 'LOW',      bars: 1 },
+    { label: 'GUARDED',  bars: 2 },
+    { label: 'ELEVATED', bars: 3 },
+    { label: 'HIGH',     bars: 4 },
+    { label: 'SEVERE',   bars: 5 },
+  ];
+  function updateThreat() {
+    const t = pick(THREATS);
+    $('#threat-level').textContent = t.label;
+    const cells = $$('#threat-bars span');
+    cells.forEach((c, i) => {
+      c.classList.remove('on', 'danger');
+      if (i < t.bars) {
+        c.classList.add('on');
+        if (t.label === 'SEVERE' || t.label === 'HIGH') c.classList.add('danger');
+      }
+    });
+    // sync bottom assessment + auth dot
+    const auth = $('#auth-status');
+    const authDot = $('#auth-dot');
+    if (t.label === 'SEVERE' || t.label === 'HIGH') {
+      auth.textContent = 'RE-AUTH REQ';
+      authDot.classList.add('danger');
+      $('#threat-assess').textContent = t.label === 'SEVERE' ? 'CODE-RED' : 'CODE-ORANGE';
+    } else {
+      auth.textContent = 'FINGERPRINT OK';
+      authDot.classList.remove('danger');
+      $('#threat-assess').textContent = t.label === 'ELEVATED' ? 'CODE-YELLOW' : 'CODE-BLUE';
+    }
+  }
+  updateThreat();
+  setInterval(updateThreat, 4400);
+
+  /* ---------- 11. WARNING POPUPS ---------- */
+  const WARNINGS = [
+    { type: 't-success', code: 'AUTH-0x01', text: 'ACCESS GRANTED' },
+    { type: 't-success', code: 'AUTH-0x07', text: 'BIOMETRIC CONFIRMED' },
+    { type: 't-success', code: 'SYS-0x21',  text: 'FIREWALL BYPASSED' },
+    { type: 't-warn',    code: 'NET-0x33',  text: 'PROXY ROTATING' },
+    { type: 't-warn',    code: 'NET-0x44',  text: 'TRACE DETECTED' },
+    { type: 't-warn',    code: 'KRN-0x09',  text: 'KERNEL ALERT' },
+    { type: 't-danger',  code: 'SEC-0xEE',  text: 'SYSTEM BREACH' },
+    { type: 't-danger',  code: 'SEC-0xFF',  text: 'INTRUSION DETECTED' },
+    { type: 't-danger',  code: 'SEC-0xC4',  text: 'FIREWALL COMPROMISED' },
+    { type: 't-info',    code: 'SCN-0x77',  text: 'PACKET INTERCEPTED' },
+    { type: 't-info',    code: 'SCN-0x52',  text: 'NODE QUARANTINED' },
+    { type: 't-warn',    code: 'GEO-0x12',  text: 'GEO-FENCE BREACH' },
+  ];
+  function spawnWarning() {
+    const w = pick(WARNINGS);
+    const el = document.createElement('div');
+    el.className = `warn ${w.type}`;
+    // random position — weighted toward top/edges to leave the center clear
+    const edge = pick(['top', 'right', 'bottom', 'left']);
+    let top, left;
+    const m = 8; // vmin margin
+    if (edge === 'top')    { top = rand(7, 28); left = rand(8, 70); }
+    if (edge === 'bottom') { top = rand(72, 90); left = rand(8, 70); }
+    if (edge === 'right')  { top = rand(12, 78); left = rand(60, 88); }
+    if (edge === 'left')   { top = rand(12, 78); left = rand(6, 30); }
+    el.style.top  = `${top}vh`;
+    el.style.left = `${left}vw`;
+    el.innerHTML = `<span class="dot"></span><span class="code">${w.code}</span>${w.text}`;
+    $('#warning-stack').appendChild(el);
+    // remove after animation completes
+    setTimeout(() => el.remove(), 5100);
+  }
+  function scheduleWarnings() {
+    spawnWarning();
+    setTimeout(spawnWarning,   irand(700, 1400));
+    setTimeout(spawnWarning,   irand(1800, 3000));
+    setTimeout(spawnWarning,   irand(3000, 4500));
+  }
+  // kick off and keep spawning
+  setTimeout(scheduleWarnings, 600);
+  setInterval(() => {
+    if (Math.random() < 0.7) spawnWarning();
+  }, 1700);
+
+  /* ---------- 12. ALERT OVERLAY (occasional full-screen flash) ---------- */
+  function spawnOverlay() {
+    const el = document.createElement('div');
+    el.className = 'alert-overlay';
+    const msgs = ['SYSTEM BREACH DETECTED', 'INTRUSION ALERT', 'LOCKDOWN INITIATED', 'FIREWALL BREACHED'];
+    el.innerHTML = `<div class="top">${pick(msgs)}</div><div class="bot">${pick(msgs)}</div>`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2600);
+  }
+  setTimeout(spawnOverlay, 4200);
+  setInterval(() => { if (Math.random() < 0.45) spawnOverlay(); }, 9000);
+
+  /* ---------- 13. ring-2 ticks — fill the empty tick group dynamically ---------- */
+  (() => {
+    const ring2Svg = $$('.ring-2 svg')[0];
+    if (!ring2Svg) return;
+    const g = ring2Svg.querySelectorAll('g')[0]; // 1st <g> is the tick placeholder
+    if (!g) return;
+    let frag = '';
+    for (let i = 0; i < 60; i++) {
+      frag += `<line x1="0" y1="-78" x2="0" y2="-72" transform="rotate(${i * 6})"/>`;
+    }
+    g.innerHTML = frag;
+  })();
+
+  /* ---------- 14. scope path animation via JS ---------- */
+  (() => {
+    const path = document.getElementById('scope-path');
+    if (!path) return;
+    const samples = [];
+    const N = 40;
+    for (let i = 0; i < N; i++) samples.push(irand(8, 52));
+    // occasionally inject a "heartbeat" spike
+    samples[8]  = 6;
+    samples[24] = 6;
+    function build() {
+      let d = 'M0,30';
+      for (let i = 1; i < samples.length; i++) {
+        d += ` L${i * 20},${samples[i]}`;
+      }
+      return d;
+    }
+    function tick() {
+      // random walk each sample toward a random new value
+      for (let i = 1; i < samples.length; i++) {
+        samples[i] += irand(-4, 4);
+        samples[i] = Math.max(8, Math.min(52, samples[i]));
+      }
+      // pulse a heartbeat spike every ~12 frames
+      const spikeAt = irand(4, samples.length - 4);
+      samples[spikeAt]     = 4;
+      samples[spikeAt + 1] = 54;
+      samples[spikeAt + 2] = 16;
+      path.setAttribute('d', build());
+    }
+    setInterval(tick, 240);
+  })();
+
+  /* ====================================================================
+     v2.0 NEW MODULES — boot, icosahedron, parallax, matrix, ripple, glitch, sparkline
+     ==================================================================== */
+
+  /* ---------- 16. BOOT SEQUENCE ---------- */
+  const BOOT_LINES = [
+    { t: '> Booting kernel ... OK',                              cls: 'ok'   },
+    { t: '> Loading neural interface drivers ... OK',            cls: 'ok'   },
+    { t: '> Establishing secure tunnel [AES-512] ... OK',        cls: 'ok'   },
+    { t: '> Synchronizing biometric feed (Tony Stark) ... OK',   cls: 'ok'   },
+    { t: '> Initializing cybernetics HUD v3.7.2 ...',            cls: ''     },
+    { t: '> Calibrating 30+ neural channels ... OK',             cls: 'ok'   },
+    { t: '> Activating threat matrix ... OK',                    cls: 'ok'   },
+    { t: '> Linking Stark Industries mainframe ... OK',           cls: 'ok'   },
+    { t: '> WARNING: residual trace detected from prior session',cls: 'warn' },
+    { t: '> Engaging countermeasures ... OK',                    cls: 'ok'   },
+    { t: '> All systems nominal.',                                cls: 'ok'   },
+    { t: '> READY.',                                              cls: 'ok'   },
+  ];
+  function bootSequence() {
+    const log = $('#boot-log');
+    if (!log) return;
+    const STEP = 165; // ms per line
+    BOOT_LINES.forEach((line, i) => {
+      setTimeout(() => {
+        const div = document.createElement('span');
+        div.className = 'ln ' + line.cls;
+        div.textContent = line.t;
+        div.style.animationDelay = '0s';
+        div.style.animation = 'boot-line-in 0.28s ease-out forwards';
+        log.appendChild(div);
+        // autoscroll inside log
+        log.scrollTop = log.scrollHeight;
+        // progress
+        const pct = Math.min(100, Math.round(((i + 1) / BOOT_LINES.length) * 100));
+        const pctEl = $('#boot-pct');
+        if (pctEl) pctEl.textContent = pct + '%';
+      }, 250 + i * STEP);
+    });
+  }
+  bootSequence();
+
+  /* ---------- 17. 3D WIREFRAME ICOSAHEDRON ---------- */
+  function buildIcosahedron() {
+    const PHI = (1 + Math.sqrt(5)) / 2; // golden ratio ≈ 1.618
+    const V_RAW = [
+      [0,  1,  PHI], [0, -1,  PHI], [0,  1, -PHI], [0, -1, -PHI],
+      [1,  PHI, 0], [-1,  PHI, 0], [1, -PHI, 0], [-1, -PHI, 0],
+      [PHI, 0,  1], [-PHI, 0,  1], [PHI, 0, -1], [-PHI, 0, -1],
+    ];
+    // Normalize so the largest |coord| = 1, then scale to 50 (so fits in 100x100)
+    const maxCoord = Math.max(...V_RAW.flat().map(Math.abs));
+    const SCALE = 50 / maxCoord;
+    const V = V_RAW.map(v => v.map(c => c * SCALE));
+
+    const E = [
+      [0,1],[0,4],[0,5],[0,8],[0,9],
+      [1,6],[1,7],[1,8],[1,9],
+      [2,4],[2,5],[2,10],[2,11],
+      [3,6],[3,7],[3,10],[3,11],
+      [4,5],[4,8],[4,10],
+      [5,9],[5,11],
+      [6,7],[6,8],[6,10],
+      [7,9],[7,11],
+      [8,10],[9,11]
+    ];
+
+    const container = document.getElementById('iso-container');
+    if (!container) return;
+
+    // Clear any pre-existing children except the inner wrapper
+    const innerWrap = container.querySelector('.iso-inner');
+    const frag = document.createDocumentFragment();
+
+    // Helper to build a rotate3d transform that aligns +X to a 3D direction (dx,dy,dz)
+    function alignX(dx, dy, dz) {
+      const len = Math.sqrt(dx*dx + dy*dy + dz*dz);
+      if (len === 0) return 'rotate3d(1,0,0,0deg)';
+      // axis = X × dir (then normalized)
+      const ax_raw = 0;       // 1*dz - 0*dy = dz, but X×dir = (0*dz-0*dy, 0*dx-1*dz, 1*dy-0*dx) = (0, -dz, dy)
+      const ay_raw = -dz;
+      const az_raw =  dy;
+      let ax = 0, ay = 0, az = 1;
+      const crossMag = Math.sqrt(dy*dy + dz*dz);
+      if (crossMag > 1e-4) {
+        ay = -dz / crossMag;
+        az =  dy / crossMag;
+      }
+      // angle: from +X (1,0,0) to (dx,dy,dz)/len
+      const cosA = Math.max(-1, Math.min(1, dx / len));
+      const angle = Math.acos(cosA) * 180 / Math.PI;
+      return `rotate3d(${ax},${ay.toFixed(4)},${az.toFixed(4)},${angle.toFixed(3)}deg)`;
+    }
+
+    // EDGES
+    E.forEach(([a, b]) => {
+      const v1 = V[a], v2 = V[b];
+      const mx = (v1[0]+v2[0])/2;
+      const my = (v1[1]+v2[1])/2;
+      const mz = (v1[2]+v2[2])/2;
+      const dx = v2[0]-v1[0];
+      const dy = v2[1]-v1[1];
+      const dz = v2[2]-v1[2];
+      const len = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+      const e = document.createElement('div');
+      e.className = 'iso-edge';
+      // shift left so div center sits at left:50%; then translate to midpoint; rotate3d aligns X with edge dir
+      e.style.width     = len.toFixed(2) + 'px';
+      e.style.transform = `translate(-50%, -50%) translate3d(${mx.toFixed(2)}px, ${my.toFixed(2)}px, ${mz.toFixed(2)}px) ${alignX(dx, dy, dz)}`;
+      frag.appendChild(e);
+    });
+
+    // VERTICES (mark two as "hot" amber for visual interest)
+    const HOT = new Set([0, 7]);
+    V.forEach((v, i) => {
+      const p = document.createElement('div');
+      p.className = 'iso-vertex' + (HOT.has(i) ? ' hot' : '');
+      p.style.transform = `translate(-50%, -50%) translate3d(${v[0].toFixed(2)}px, ${v[1].toFixed(2)}px, ${v[2].toFixed(2)}px)`;
+      frag.appendChild(p);
+    });
+
+    container.insertBefore(frag, innerWrap);
+  }
+  buildIcosahedron();
+
+  /* ---------- 18. MOUSE PARALLAX ---------- */
+  (() => {
+    let raf = null;
+    let mx = 0, my = 0, tx = 0, ty = 0;
+    const onMove = (e) => {
+      // -1..1
+      tx = (e.clientX / window.innerWidth  - 0.5) * 2;
+      ty = (e.clientY / window.innerHeight - 0.5) * 2;
+      if (!raf) raf = requestAnimationFrame(apply);
+    };
+    const apply = () => {
+      // smooth lerp
+      mx += (tx - mx) * 0.12;
+      my += (ty - my) * 0.12;
+      const rotY = mx * 5;   // ±5°
+      const rotX = my * -3.5; // ±3.5°
+      document.documentElement.style.setProperty('--mx', mx.toFixed(3));
+      document.documentElement.style.setProperty('--my', my.toFixed(3));
+      const center = document.querySelector('.hud-center');
+      if (center) {
+        center.style.transform =
+          `perspective(1600px) rotateY(${rotY.toFixed(2)}deg) rotateX(${rotX.toFixed(2)}deg)`;
+      }
+      // background layers drift oppositely for depth
+      const bgHex = document.querySelector('.bg-hex');
+      if (bgHex) bgHex.style.transform = `translate(${mx*-6}px, ${my*-6}px)`;
+      const bgGrid = document.querySelector('.bg-grid');
+      if (bgGrid) bgGrid.style.transform = `perspective(900px) rotateX(62deg) translate(${mx*-10}px, ${my*-10}px) translateY(20vh) scale(2)`;
+      if (Math.abs(tx - mx) > 0.001 || Math.abs(ty - my) > 0.001) {
+        raf = requestAnimationFrame(apply);
+      } else {
+        raf = null;
+      }
+    };
+    window.addEventListener('mousemove', onMove, { passive: true });
+  })();
+
+  /* ---------- 19. CLICK RIPPLE ---------- */
+  function spawnRipple(x, y) {
+    const el = document.createElement('div');
+    el.className = 'ripple';
+    el.style.left = x + 'px';
+    el.style.top  = y + 'px';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 950);
+  }
+  document.addEventListener('click', (e) => {
+    // pick variant based on element clicked
+    let cls = '';
+    if (e.target.closest('.warn.t-danger')) cls = ' t-danger';
+    else if (e.target.closest('.warn.t-warn')) cls = ' t-warn';
+    else if (e.target.closest('.warn.t-success')) cls = ' t-success';
+    const r = document.createElement('div');
+    r.className = 'ripple' + cls;
+    r.style.left = e.clientX + 'px';
+    r.style.top  = e.clientY + 'px';
+    document.body.appendChild(r);
+    setTimeout(() => r.remove(), 950);
+  });
+
+  /* ---------- 20. MATRIX RAIN ---------- */
+  (() => {
+    const container = document.getElementById('matrix-rain');
+    if (!container) return;
+    const CHARS = '0123456789ABCDEF<>{}[]/\\|=+-*#@$%';
+    const COLS  = 56; // number of columns
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < COLS; i++) {
+      const col = document.createElement('div');
+      col.className = 'col';
+      // left position spread evenly
+      const left = (i / COLS) * 100 + (Math.random() - 0.5) * (100 / COLS) * 0.6;
+      col.style.left = left.toFixed(2) + 'vw';
+      // duration 8-20s, delay 0-12s
+      const dur = rand(8, 22);
+      col.style.animationDuration = dur.toFixed(1) + 's';
+      col.style.animationDelay = (-rand(0, 18)).toFixed(2) + 's';
+      // content: 12-22 chars with a brighter "head" char at the end (will be at top because writing-mode: vertical-rl)
+      const len = irand(14, 24);
+      let body = '';
+      for (let j = 0; j < len - 1; j++) body += CHARS[irand(0, CHARS.length - 1)];
+      const head = CHARS[irand(0, CHARS.length - 1)];
+      col.innerHTML = body + '<span class="head">' + head + '</span>';
+      // opacity slightly randomized
+      col.style.opacity = (0.7 + Math.random() * 0.3).toFixed(2);
+      frag.appendChild(col);
+    }
+    container.appendChild(frag);
+  })();
+
+  /* ---------- 21. SPARKLINES on each process bar ---------- */
+  const HIST = { CPU: [], MEM: [], DSK: [], NET: [] };
+  const HIST_MAX = 36;
+  function pushHist(k, v) {
+    const arr = HIST[k];
+    arr.push(v);
+    if (arr.length > HIST_MAX) arr.shift();
+  }
+  function sparkPath(arr) {
+    if (arr.length < 2) return '';
+    const W = 100, H = 30;
+    const max = 100, min = 0;
+    const step = W / (HIST_MAX - 1);
+    let d = '';
+    arr.forEach((v, i) => {
+      const x = i * step;
+      const y = H - ((v - min) / (max - min)) * H;
+      d += (i === 0 ? 'M' : ' L') + x.toFixed(2) + ',' + y.toFixed(2);
+    });
+    return d;
+  }
+  function drawSparklines() {
+    ['CPU', 'MEM', 'DSK', 'NET'].forEach(k => {
+      const id = 'spark-' + k.toLowerCase();
+      const el = document.getElementById(id);
+      if (!el) return;
+      const path = el.querySelector('path');
+      const dot  = el.querySelector('.dot');
+      if (!path) return;
+      const d = sparkPath(HIST[k]);
+      path.setAttribute('d', d);
+      // dot at last sample
+      if (dot && HIST[k].length) {
+        const W = 100, H = 30;
+        const v = HIST[k][HIST[k].length - 1];
+        const x = (HIST[k].length - 1) * (W / (HIST_MAX - 1));
+        const y = H - (v / 100) * H;
+        dot.setAttribute('cx', x.toFixed(2));
+        dot.setAttribute('cy', y.toFixed(2));
+      }
+    });
+  }
+  // Hook into the existing update interval: capture last value per metric
+  const _origUpdateBars = window.setInterval;
+  // Easier: piggy-back by reading the DOM after the existing 1.7s tick
+  function captureFromDOM() {
+    const get = id => parseInt((document.getElementById(id)?.textContent || '0').replace('%',''), 10) || 0;
+    pushHist('CPU', get('cpu-pct'));
+    pushHist('MEM', get('mem-pct'));
+    pushHist('DSK', get('dsk-pct'));
+    pushHist('NET', get('net-pct'));
+    drawSparklines();
+  }
+  setInterval(captureFromDOM, 700);
+  // initial seed so sparklines aren't empty
+  ['CPU','MEM','DSK','NET'].forEach(k => {
+    for (let i = 0; i < 8; i++) pushHist(k, irand(20, 80));
+  });
+  drawSparklines();
+
+  /* ---------- 22. GLITCH TEXT on threat-level ---------- */
+  const _threatEl = () => document.getElementById('threat-level');
+  function triggerGlitch(el) {
+    if (!el) return;
+    el.classList.remove('live');
+    void el.offsetWidth; // reflow to restart animation
+    el.setAttribute('data-text', el.textContent);
+    el.classList.add('live');
+    setTimeout(() => el.classList.remove('live'), 460);
+  }
+  setInterval(() => {
+    if (Math.random() < 0.35) triggerGlitch(_threatEl());
+  }, 4200);
+
+  /* ---------- 23. SCREEN SHAKE on alert overlay ---------- */
+  // Use MutationObserver to detect when .alert-overlay is added → trigger body shake
+  const shakeObserver = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      for (const n of m.addedNodes) {
+        if (n.nodeType === 1 && n.classList && n.classList.contains('alert-overlay')) {
+          document.body.classList.add('shake');
+          setTimeout(() => document.body.classList.remove('shake'), 480);
+          break;
+        }
+      }
+    }
+  });
+  shakeObserver.observe(document.body, { childList: true, subtree: true });
+
+  /* ---------- 24. KEYBOARD EASTER EGG ---------- */
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { spawnOverlay(); }
+    if (e.key === ' ')      { e.preventDefault(); spawnWarning(); }
+  });
+
+})();
+</script>
 </body>
 </html>
