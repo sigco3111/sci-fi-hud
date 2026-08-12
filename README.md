@@ -10,7 +10,7 @@
 
 ## 🎬 라이브 데모 (Live Demo)
 
-> **👉 [https://sci-fi-hud.vercel.app/](https://sci-fi-hud.vercel.app/)** — 풀스크린으로 보는 것을 강력 권장 (F11)
+> **👉 [https://sigco3111.github.io/sci-fi-hud/](https://sigco3111.github.io/sci-fi-hud/)** — 풀스크린으로 보는 것을 강력 권장 (F11)
 
 | | |
 |---|---|
@@ -79,7 +79,7 @@ Implementation Advice: Use Pure CSS Animations (Keyframes) and SVG for the clean
 ## 🚀 실행 방법 (Quick Start)
 
 ### 방법 1: 라이브 데모 (Vercel) — 가장 간단
-👉 [https://sci-fi-hud.vercel.app/](https://sci-fi-hud.vercel.app/) — 별도 설치 없이 바로 실행됩니다.
+👉 [https://sigco3111.github.io/sci-fi-hud/](https://sigco3111.github.io/sci-fi-hud/) — 별도 설치 없이 바로 실행됩니다.
 
 ### 방법 2: 그냥 브라우저로 열기
 ```bash
