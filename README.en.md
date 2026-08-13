@@ -10,11 +10,11 @@ A 24-module complex HUD inspired by Iron Man's JARVIS and sci-fi hacking screens
 
 ## 🎬 Live Demo
 
-> **👉 [https://sci-fi-hud.vercel.app/](https://sci-fi-hud.vercel.app/)** — Strongly recommend fullscreen (F11)
+> **👉 [https://sigco3111.github.io/sci-fi-hud/](https://sigco3111.github.io/sci-fi-hud/)** — Strongly recommend fullscreen (F11)
 
 | | |
 |---|---|
-| ![Demo](https://img.shields.io/badge/Live-Demo-7C3AED?style=for-the-badge&logo=vercel&logoColor=white) | [![Repo](https://img.shields.io/badge/GitHub-sigco3111%2Fsci--fi--hud-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sigco3111/sci-fi-hud) |
+| ![Demo](https://img.shields.io/badge/Live-Demo-222222?style=for-the-badge&logo=githubpages&logoColor=white) | [![Repo](https://img.shields.io/badge/GitHub-sigco3111%2Fsci--fi--hud-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sigco3111/sci-fi-hud) |
 | ![Status](https://img.shields.io/badge/Status-Live-22C55E?style=flat-square) | ![Stack](https://img.shields.io/badge/Stack-Pure_CSS_+_SVG-FF6B6B?style=flat-square) |
 | ![License](https://img.shields.io/badge/License-MIT-F1C40F?style=flat-square) | ![Deps](https://img.shields.io/badge/Dependencies-0-9CA3AF?style=flat-square) |
 | ![Size](https://img.shields.io/badge/Size-99_KB_single_file-FFA500?style=flat-square) | ![Offline](https://img.shields.io/badge/Offline-OK-22C55E?style=flat-square) |
@@ -78,8 +78,8 @@ Implementation Advice: Use Pure CSS Animations (Keyframes) and SVG for the clean
 
 ## 🚀 Run It
 
-### Option 1: Live Demo (Vercel) — easiest
-👉 [https://sci-fi-hud.vercel.app/](https://sci-fi-hud.vercel.app/) — works out of the box.
+### Option 1: Live Demo (GitHub Pages) — easiest
+👉 [https://sigco3111.github.io/sci-fi-hud/](https://sigco3111.github.io/sci-fi-hud/) — works out of the box.
 
 ### Option 2: Open Locally
 ```bash
